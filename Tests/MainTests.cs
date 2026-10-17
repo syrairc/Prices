@@ -120,9 +120,62 @@ public sealed class MainTests
         Check.That(TestGame.InventoryAskedDuring(() => TestFrame.Vertices(plugin.Render)), "asked while the stash is open");
     }
 
+    static GroundItem Ground(int rareValue, bool equipment = true, int baseId = 1) =>
+        new(1, new Vector2(100, 200), new Vector2(300, 230), Vector3.Zero, true, [], []) { BaseId = baseId, RareValue = rareValue, Equipment = equipment };
+
+    static GameState GroundState(params GroundItem[] items) => GameState.Empty with { GroundItems = items };
+
+    [Test]
+    public void GroundTagsOnlyLegendaryByDefault()
+    {
+        var plugin = Plugin();
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(1), Ground(2), Ground(3), Ground(4))));
+        Check.That(Vertices(plugin, GroundState(Ground(100))) > 0, "legendary tagged");
+    }
+
+    [Test]
+    public void GroundRarityChoicesApply()
+    {
+        var plugin = Plugin();
+        plugin.Settings.GroundPurple = true;
+        Check.That(Vertices(plugin, GroundState(Ground(3))) > 0, "purple on");
+        plugin.Settings.GroundOrange = false;
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(100))));
+    }
+
+    [Test]
+    public void GroundNonEquipmentIsOffByDefault()
+    {
+        var plugin = Plugin();
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(100, equipment: false))));
+        plugin.Settings.GroundNonEquipment = true;
+        Check.That(Vertices(plugin, GroundState(Ground(100, equipment: false))) > 0, "non-equipment on");
+    }
+
+    [Test]
+    public void GroundUnpricedFullScreenAndDisabledDrawNothing()
+    {
+        var plugin = Plugin();
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(100, baseId: 99))));
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(100)) with { Ui = new GameUi([new GamePanel("Map", PanelKind.WorldMap, default, new Vector2(900, 600), true)]) }));
+        Check.Equal(0, Vertices(plugin, GroundState()));
+        plugin.Settings.GroundEnabled = false;
+        Check.Equal(0, Vertices(plugin, GroundState(Ground(100))));
+    }
+
+    [Test]
+    public void AsksForGroundItemsOnlyWhenEnabled()
+    {
+        var plugin = Plugin();
+        Check.That(TestGame.GroundItemsAskedDuring(plugin.Tick), "enabled");
+        plugin.Settings.GroundEnabled = false;
+        Check.That(!TestGame.GroundItemsAskedDuring(plugin.Tick), "disabled");
+    }
+
     [Test]
     public void SettingsPageDraws()
     {
         Check.That(TestFrame.Vertices(new Settings().Draw, inWindow: true) > 0, "settings page draws");
+        Check.That(TestFrame.Vertices(new Settings().DrawGround, inWindow: true) > 0, "ground tab draws");
     }
 }

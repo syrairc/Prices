@@ -14,6 +14,7 @@ public sealed class Main : Plugin<Settings>
 {
     const string FeIcon = "UI_Item_chuhuoyuanzhiV3_Icon_128";
     const float IconGap = 2;
+    const float GroundGap = 4;
 
     static readonly Dictionary<int, Price> NoPrices = [];
 
@@ -61,6 +62,7 @@ public sealed class Main : Plugin<Settings>
 
     public override void Tick()
     {
+        if (Settings.GroundEnabled) Game.WantGroundItems();
         Contribute();
         if (Job.TakeFinished() is { } done)
         {
@@ -74,7 +76,7 @@ public sealed class Main : Plugin<Settings>
         }
         var seasonKey = (Settings.Season, LogSeason);
         if (seasonKey != _seasonKey) _nextAt = 0;
-        if (!Settings.Enabled || Job.Running || Clock() < _nextAt) return;
+        if (!(Settings.Enabled || Settings.GroundEnabled) || Job.Running || Clock() < _nextAt) return;
         _seasonKey = _jobKey = seasonKey;
         var http = Http;
         var directory = DataDirectory;
@@ -191,6 +193,12 @@ public sealed class Main : Plugin<Settings>
 
     public override void Render()
     {
+        DrawInventory();
+        DrawGround();
+    }
+
+    void DrawInventory()
+    {
         if (!Settings.Enabled) return;
         var state = Game.State;
         var kind = OpenKind(state.Ui);
@@ -207,29 +215,50 @@ public sealed class Main : Plugin<Settings>
 
     void DrawTags(IReadOnlyList<InventoryItem> items, Vector2 clipMin, Vector2 clipMax, BagCell[] cells, Func<InventoryItem, bool> onTab)
     {
-        var style = Settings.Text;
-        var hasIcon = false;
-        Sprite icon = default;
-        if (Settings.ShowIcon) hasIcon = Draw.TryGameIcon(FeIcon, out icon);
+        var icon = TagIcon(out var hasIcon);
         using var clip = Draw.Clip(clipMin, clipMax);
         foreach (var item in items)
         {
-            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item) is not { } text) continue;
+            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item.BaseId, item.Count, item.Bag == InventoryBag.Equipment) is not { } text) continue;
             foreach (var cell in cells)
             {
                 if (cell.Slot != item.Slot) continue;
-                var size = Draw.MeasureText(text, style);
-                var height = size.Y;
-                var at = Tags.Anchor(Settings.Corner, cell.Min, cell.Max, new Vector2(size.X + (hasIcon ? height + IconGap : 0), height)) + new Vector2(Settings.OffsetX, Settings.OffsetY);
-                if (hasIcon)
-                {
-                    Draw.Image(icon, at, at + new Vector2(height));
-                    at.X += height + IconGap;
-                }
-                Draw.Text(text, at, style);
+                DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, cell.Min, cell.Max, size) + new Vector2(Settings.OffsetX, Settings.OffsetY));
                 break;
             }
         }
+    }
+
+    void DrawGround()
+    {
+        if (!Settings.GroundEnabled || Game.State.GroundItems is not { } items || Game.State.Ui.AnyFullScreen) return;
+        var icon = TagIcon(out var hasIcon);
+        foreach (var item in items)
+        {
+            if (!Settings.ShowsOnGround(item) || TagFor(item.BaseId, item.Count, item.Equipment) is not { } text) continue;
+            DrawTag(text, icon, hasIcon, size => new Vector2(item.LabelMax.X + GroundGap, (item.LabelMin.Y + item.LabelMax.Y - size.Y) / 2));
+        }
+    }
+
+    Sprite TagIcon(out bool hasIcon)
+    {
+        Sprite icon = default;
+        hasIcon = Settings.ShowIcon && Draw.TryGameIcon(FeIcon, out icon);
+        return icon;
+    }
+
+    void DrawTag(string text, Sprite icon, bool hasIcon, Func<Vector2, Vector2> place)
+    {
+        var style = Settings.Text;
+        var size = Draw.MeasureText(text, style);
+        var height = size.Y;
+        var at = place(new Vector2(size.X + (hasIcon ? height + IconGap : 0), height));
+        if (hasIcon)
+        {
+            Draw.Image(icon, at, at + new Vector2(height));
+            at.X += height + IconGap;
+        }
+        Draw.Text(text, at, style);
     }
 
     static PanelKind? OpenKind(GameUi ui)
@@ -239,11 +268,11 @@ public sealed class Main : Plugin<Settings>
         return null;
     }
 
-    string? TagFor(InventoryItem item)
+    string? TagFor(int baseId, int count, bool gear)
     {
-        var key = (item.BaseId, item.Count, item.Bag == InventoryBag.Equipment);
+        var key = (baseId, count, gear);
         if (_tags.TryGetValue(key, out var text)) return text;
-        text = Tags.Text(item, _prices);
+        text = Tags.Text(baseId, count, gear, _prices);
         if (text is not null) _tags[key] = text;
         return text;
     }
