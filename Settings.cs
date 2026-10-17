@@ -11,8 +11,15 @@ public sealed class Settings : PluginSettings
 {
     public bool Enabled = true;
     public Corner Corner = Corner.TopLeft;
+    public int OffsetX = 6;
+    public int OffsetY = 8;
     public TextStyle Text = new() { Color = Color.FromArgb(0xF9, 0xDD, 0x75), ShadowEnabled = true };
     public bool ShowIcon = true;
+    public bool ShowGrey = true;
+    public bool ShowCyan = true;
+    public bool ShowPurple = true;
+    public bool ShowPink = true;
+    public bool ShowOrange = true;
     public int RefreshMinutes = 5;
     public int Season;
     public bool Contribute;
@@ -21,6 +28,8 @@ public sealed class Settings : PluginSettings
 
     public const int MinRefreshMinutes = 5;
 
+    public bool Shows(int rareValue) => rareValue switch { 1 => ShowGrey, 2 => ShowCyan, 3 => ShowPurple, 4 => ShowPink, 100 => ShowOrange, _ => true };
+
     string _seasonText = "";
     bool _seasonEditing;
 
@@ -28,8 +37,15 @@ public sealed class Settings : PluginSettings
     {
         Setting.Checkbox("Show prices", ref Enabled, "A price tag on each priced item in the open bag");
         Setting.Choice("Corner", ref Corner, "Which corner of the cell the tag sits in - bottom-right is where the game draws its own item count");
+        Setting.Slider("Offset X", ref OffsetX, -100, 100, "Pixels from the corner, positive moves the tag right");
+        Setting.Slider("Offset Y", ref OffsetY, -100, 100, "Pixels from the corner, positive moves the tag down");
         Setting.Style("Text", Text, "Colour, size, background and shadow of the tag");
         Setting.Checkbox("Show FE icon", ref ShowIcon, "The FE icon in front of the number - needs the game icons from Setup");
+        Setting.Checkbox("Grey items", ref ShowGrey, "Price tags on grey frame items (normal)");
+        Setting.Checkbox("Cyan items", ref ShowCyan, "Price tags on cyan frame items (magic)");
+        Setting.Checkbox("Purple items", ref ShowPurple, "Price tags on purple frame items (rare)");
+        Setting.Checkbox("Pink items", ref ShowPink, "Price tags on pink frame items");
+        Setting.Checkbox("Orange items", ref ShowOrange, "Price tags on orange frame items (legendary)");
         Setting.Slider("Refresh every (minutes)", ref RefreshMinutes, MinRefreshMinutes, 60, "How often new prices are downloaded");
         ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted("Season");

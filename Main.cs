@@ -203,13 +203,13 @@ public sealed class Main : Plugin<Settings>
         using var clip = Draw.Clip(bag.ClipMin, bag.ClipMax);
         foreach (var item in inventory)
         {
-            if (item.Bag != bag.Tab || TagFor(item) is not { } text) continue;
+            if (item.Bag != bag.Tab || !Settings.Shows(item.RareValue) || TagFor(item) is not { } text) continue;
             foreach (var cell in bag.Cells)
             {
                 if (cell.Slot != item.Slot) continue;
                 var size = Draw.MeasureText(text, style);
                 var height = size.Y;
-                var at = Tags.Anchor(Settings.Corner, cell.Min, cell.Max, new Vector2(size.X + (hasIcon ? height + IconGap : 0), height));
+                var at = Tags.Anchor(Settings.Corner, cell.Min, cell.Max, new Vector2(size.X + (hasIcon ? height + IconGap : 0), height)) + new Vector2(Settings.OffsetX, Settings.OffsetY);
                 if (hasIcon)
                 {
                     Draw.Image(icon, at, at + new Vector2(height));

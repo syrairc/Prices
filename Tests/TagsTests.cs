@@ -71,4 +71,13 @@ public sealed class TagsTests
         Check.Equal(new Vector2(3, 120), Tags.Anchor(Corner.BottomLeft, min, max, tag));
         Check.Equal(new Vector2(61, 120), Tags.Anchor(Corner.BottomRight, min, max, tag));
     }
+
+    [Test]
+    public void RarityTogglesHideOnlyTheirFrame()
+    {
+        var settings = new Settings { ShowGrey = false, ShowOrange = false };
+        Check.That(!settings.Shows(1) && !settings.Shows(100), "grey and orange hidden");
+        Check.That(settings.Shows(2) && settings.Shows(3) && settings.Shows(4), "others shown");
+        Check.That(settings.Shows(0) && settings.Shows(7), "unknown values always shown");
+    }
 }
