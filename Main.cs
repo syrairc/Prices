@@ -193,18 +193,29 @@ public sealed class Main : Plugin<Settings>
     {
         if (!Settings.Enabled) return;
         var state = Game.State;
-        if (!BagOpen(state.Ui)) return;
+        var kind = OpenKind(state.Ui);
+        if (kind is null) return;
         Game.WantInventory();
-        if (state.Bag is not { } bag || state.Inventory is not { } inventory) return;
+        if (kind == PanelKind.Inventory)
+        {
+            if (state.Bag is { } bag && state.Inventory is { } inventory)
+                DrawTags(inventory, bag.ClipMin, bag.ClipMax, bag.Cells, item => item.Bag == bag.Tab);
+        }
+        else if (state.Stash is { } stash && state.StashItems is { } items)
+            DrawTags(items, stash.ClipMin, stash.ClipMax, stash.Cells, _ => true);
+    }
+
+    void DrawTags(IReadOnlyList<InventoryItem> items, Vector2 clipMin, Vector2 clipMax, BagCell[] cells, Func<InventoryItem, bool> onTab)
+    {
         var style = Settings.Text;
         var hasIcon = false;
         Sprite icon = default;
         if (Settings.ShowIcon) hasIcon = Draw.TryGameIcon(FeIcon, out icon);
-        using var clip = Draw.Clip(bag.ClipMin, bag.ClipMax);
-        foreach (var item in inventory)
+        using var clip = Draw.Clip(clipMin, clipMax);
+        foreach (var item in items)
         {
-            if (item.Bag != bag.Tab || !Settings.Shows(item.RareValue) || TagFor(item) is not { } text) continue;
-            foreach (var cell in bag.Cells)
+            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item) is not { } text) continue;
+            foreach (var cell in cells)
             {
                 if (cell.Slot != item.Slot) continue;
                 var size = Draw.MeasureText(text, style);
@@ -221,11 +232,11 @@ public sealed class Main : Plugin<Settings>
         }
     }
 
-    static bool BagOpen(GameUi ui)
+    static PanelKind? OpenKind(GameUi ui)
     {
         foreach (var panel in ui.Panels)
-            if (panel.Kind == PanelKind.Inventory) return true;
-        return false;
+            if (panel.Kind is PanelKind.Inventory or PanelKind.Stash) return panel.Kind;
+        return null;
     }
 
     string? TagFor(InventoryItem item)

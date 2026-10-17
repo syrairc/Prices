@@ -66,6 +66,60 @@ public sealed class MainTests
         asked.SetValue(null, 0L);
     }
 
+    static readonly GameUi StashPage = new([new GamePanel("Stash", PanelKind.Stash, default, new Vector2(900, 600), false)]);
+
+    static GameState StashState(int cells, params InventoryItem[] items)
+    {
+        var views = new BagCell[cells];
+        for (var i = 0; i < cells; i++) views[i] = new BagCell(i, new Vector2(10 + i * 100, 10), new Vector2(104 + i * 100, 145));
+        return GameState.Empty with { Ui = StashPage, Stash = new StashView(0, new Vector2(0, 0), new Vector2(900, 600), views), StashItems = items };
+    }
+
+    [Test]
+    public void DrawsOneTagPerPricedStashCell()
+    {
+        var plugin = Plugin();
+        var one = Vertices(plugin, StashState(3, Item(0, 1), Item(2, 99)));
+        var two = Vertices(plugin, StashState(3, Item(0, 1), Item(1, 1), Item(2, 99)));
+        Check.That(one > 0, "one priced item draws a tag");
+        Check.Equal(one * 2, two);
+    }
+
+    [Test]
+    public void StashTagsMatchBagTags()
+    {
+        var plugin = Plugin();
+        Check.Equal(Vertices(plugin, State(3, Item(0, 1), Item(1, 1))), Vertices(plugin, StashState(3, Item(0, 1), Item(1, 1))));
+    }
+
+    [Test]
+    public void GapCellDrawsNothing()
+    {
+        var plugin = Plugin();
+        var one = Vertices(plugin, StashState(3, Item(0, 1)));
+        Check.Equal(one * 2, Vertices(plugin, StashState(3, Item(0, 1), Item(2, 1))));
+    }
+
+    [Test]
+    public void NoStashItemsDrawsNothing()
+    {
+        Check.Equal(0, Vertices(Plugin(), StashState(3) with { StashItems = null }));
+    }
+
+    [Test]
+    public void StashClosedDrawsNothing()
+    {
+        Check.Equal(0, Vertices(Plugin(), StashState(3, Item(0, 1)) with { Ui = GameUi.Empty }));
+    }
+
+    [Test]
+    public void StashAsksForTheInventory()
+    {
+        var plugin = Plugin();
+        TestGame.Set(StashState(3, Item(0, 1)));
+        Check.That(TestGame.InventoryAskedDuring(() => TestFrame.Vertices(plugin.Render)), "asked while the stash is open");
+    }
+
     [Test]
     public void SettingsPageDraws()
     {
