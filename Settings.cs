@@ -56,16 +56,20 @@ public sealed class Settings : PluginSettings
 
     [JsonIgnore] public PriceSource[] Active => [.. Order().Where(Uses)];
 
-    public sealed record Row(int BaseId, float Median, float? Low, float? High);
+    public sealed record Row(int BaseId, float Median, float? Low, float? High, DateTimeOffset? Updated, int? Submissions, int? Devices);
 
-    public static List<Row> Rows(IReadOnlyDictionary<int, Price> table) => [.. table.OrderBy(pair => pair.Key).Select(pair => new Row(pair.Key, pair.Value.Median, pair.Value.Low, pair.Value.High))];
+    public static List<Row> Rows(IReadOnlyDictionary<int, Price> table) => [.. table.OrderBy(pair => pair.Key).Select(pair => new Row(pair.Key, pair.Value.Median, pair.Value.Low, pair.Value.High, pair.Value.Updated, pair.Value.Submissions, pair.Value.Devices))];
 
     static readonly TableColumn<Row>[] DatabaseColumns =
     [
         new() { Header = "Base ID", Width = 90, SortKey = row => row.BaseId, Draw = (row, _) => ImGui.TextUnformatted(row.BaseId.ToString()) },
+        new() { Header = "Name", SortKey = row => ItemNames.Of(row.BaseId), Draw = (row, _) => ImGui.TextUnformatted(ItemNames.Of(row.BaseId)) },
         new() { Header = "Price (FE)", Width = 110, SortKey = row => row.Median, Draw = (row, _) => ImGui.TextUnformatted(Number(row.Median)) },
         new() { Header = "Low", Width = 110, SortKey = row => row.Low ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Low is { } low ? Number(low) : "-") },
-        new() { Header = "High", SortKey = row => row.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.High is { } high ? Number(high) : "-") },
+        new() { Header = "High", Width = 110, SortKey = row => row.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.High is { } high ? Number(high) : "-") },
+        new() { Header = "Samples", Width = 80, SortKey = row => row.Submissions ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Submissions?.ToString() ?? "-") },
+        new() { Header = "Devices", Width = 80, SortKey = row => row.Devices ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Devices?.ToString() ?? "-") },
+        new() { Header = "Updated", Width = 130, SortKey = row => row.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
     ];
 
     static string Number(float value) => value.ToString(value < 10 ? "0.###" : "0.#", System.Globalization.CultureInfo.InvariantCulture);
@@ -88,13 +92,13 @@ public sealed class Settings : PluginSettings
             _rows = table is null ? [] : Rows(table);
         }
         ImGui.SameLine();
-        ImGui.TextDisabled($"{_rows.Count} items, season prices as last downloaded");
+        ImGui.TextDisabled($"{_rows.Count} items");
         if (_rows.Count == 0)
         {
             ImGui.TextDisabled(Uses(_view) ? "Nothing loaded from this database yet" : "This database is turned off");
             return;
         }
-        SortableTable.Draw("database", _rows, DatabaseColumns, ref _filter, row => row.BaseId.ToString(), ImGui.GetContentRegionAvail().Y);
+        SortableTable.Draw("database", _rows, DatabaseColumns, ref _filter, row => row.BaseId + " " + ItemNames.Of(row.BaseId), ImGui.GetContentRegionAvail().Y);
     }
 
     string _seasonText = "";

@@ -88,9 +88,17 @@ public sealed class PriceSyncTests
         const string json = """[{"config_base_id":115,"price_fe_median":1,"price_fe_p10":null,"price_fe_p90":null,"updated_at":"2026-10-17T13:20:00.110608+00:00"},{"config_base_id":118,"price_fe_median":5.5,"price_fe_p10":4,"price_fe_p90":9,"updated_at":"2026-10-17T15:40:00.06924+00:00"}]""";
         var (rows, newest) = PriceSync.Parse(json);
         Check.Equal(2, rows.Count);
-        Check.Equal(new Price(1, null, null), rows[115]);
-        Check.Equal(new Price(5.5f, 4, 9), rows[118]);
+        Check.Equal(new Price(1, null, null, DateTimeOffset.Parse("2026-10-17T13:20:00.110608+00:00")), rows[115]);
+        Check.Equal(new Price(5.5f, 4, 9, DateTimeOffset.Parse("2026-10-17T15:40:00.06924+00:00")), rows[118]);
         Check.Equal("2026-10-17T15:40:00.06924+00:00", newest);
+    }
+
+    [Test]
+    public void ParseReadsSampleCountsAndDevices()
+    {
+        var (rows, _) = PriceSync.Parse("""[{"config_base_id":3111,"price_fe_median":1,"price_fe_p10":1,"price_fe_p90":4.2,"submission_count":29,"unique_devices":20,"updated_at":"2026-10-19T23:25:00.28191+00:00"}]""");
+        Check.Equal(29, rows[3111].Submissions ?? 0);
+        Check.Equal(20, rows[3111].Devices ?? 0);
     }
 
     [Test]

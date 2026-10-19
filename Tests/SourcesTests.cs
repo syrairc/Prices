@@ -57,8 +57,9 @@ public sealed class SourcesTests
     {
         var rows = EtorSync.Parse(Snapshot(("5028", 12.5f), ("115", 0.25f), ("bad", 3f), ("200", 0f)));
         Check.Equal(2, rows.Count);
-        Check.Equal(new Price(12.5f, null, null), rows[5028]);
-        Check.Equal(new Price(0.25f, null, null), rows[115]);
+        var updated = DateTimeOffset.Parse("2026-10-19T15:00:00Z");
+        Check.Equal(new Price(12.5f, null, null, updated), rows[5028]);
+        Check.Equal(new Price(0.25f, null, null, updated), rows[115]);
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
@@ -5,7 +6,7 @@ using EmberHUD;
 
 namespace Prices;
 
-public readonly record struct Price(float Median, float? Low, float? High);
+public readonly record struct Price(float Median, float? Low, float? High, DateTimeOffset? Updated = null, int? Submissions = null, int? Devices = null);
 
 public enum Corner : byte { TopLeft, TopRight, BottomLeft, BottomRight }
 

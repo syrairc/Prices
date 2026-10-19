@@ -25,6 +25,7 @@ public static class EtorSync
                 var (field, bytes) = Field(data, ref at, data.Length);
                 if (field != 2 || bytes is not { } item) continue;
                 string? id = null;
+                string? updated = null;
                 var price = 0f;
                 var position = item.Start;
                 while (position < item.End)
@@ -32,9 +33,10 @@ public static class EtorSync
                     var (inner, value) = Field(data, ref position, item.End);
                     if (value is not { } slice) continue;
                     if (inner == 1) id = System.Text.Encoding.UTF8.GetString(data, slice.Start, slice.End - slice.Start);
+                    else if (inner == 4) updated = System.Text.Encoding.UTF8.GetString(data, slice.Start, slice.End - slice.Start);
                     else if (inner == 3 && slice.End - slice.Start == 4) price = BitConverter.ToSingle(data, slice.Start);
                 }
-                if (int.TryParse(id, out var baseId) && price > 0) rows[baseId] = new Price(price, null, null);
+                if (int.TryParse(id, out var baseId) && price > 0) rows[baseId] = new Price(price, null, null, DateTimeOffset.TryParse(updated, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var stamp) ? stamp : null);
             }
         }
         catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentException)

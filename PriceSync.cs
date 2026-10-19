@@ -23,7 +23,7 @@ public static class PriceSync
     static readonly TimeSpan Recent = TimeSpan.FromDays(7);
 
     public static string PricesUrl(int season, string? since, int offset) =>
-        $"{Base}/rest/v1/aggregated_prices?season_id=eq.{season}&select=config_base_id,price_fe_median,price_fe_p10,price_fe_p90,updated_at&order=config_base_id&limit={PageSize}&offset={offset}"
+        $"{Base}/rest/v1/aggregated_prices?season_id=eq.{season}&select=config_base_id,price_fe_median,price_fe_p10,price_fe_p90,submission_count,unique_devices,updated_at&order=config_base_id&limit={PageSize}&offset={offset}"
         + (since is null ? "" : $"&updated_at=gt.{since.Replace("+", "%2B")}");
 
     public static (Dictionary<int, Price> Rows, string? Newest) Parse(string json)
@@ -43,7 +43,7 @@ public static class PriceSync
             count++;
             newest = Later(newest, row.GetProperty("updated_at").GetString());
             if (row.GetProperty("price_fe_median").ValueKind != JsonValueKind.Number) continue;
-            rows[row.GetProperty("config_base_id").GetInt32()] = new Price(row.GetProperty("price_fe_median").GetSingle(), Optional(row, "price_fe_p10"), Optional(row, "price_fe_p90"));
+            rows[row.GetProperty("config_base_id").GetInt32()] = new Price(row.GetProperty("price_fe_median").GetSingle(), Optional(row, "price_fe_p10"), Optional(row, "price_fe_p90"), Stamp(row.GetProperty("updated_at").GetString()), OptionalInt(row, "submission_count"), OptionalInt(row, "unique_devices"));
         }
         return (rows, newest, count);
     }
@@ -190,6 +190,9 @@ public static class PriceSync
 
     static float? Optional(JsonElement row, string name) =>
         row.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetSingle() : null;
+
+    static int? OptionalInt(JsonElement row, string name) =>
+        row.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : null;
 
     static DateTimeOffset Stamp(string? stamp) => DateTimeOffset.Parse(stamp!, CultureInfo.InvariantCulture);
 
