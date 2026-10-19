@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Text.Json.Serialization;
 using EmberHUD;
 using EmberHUD.Ui;
@@ -23,6 +24,10 @@ public sealed class Settings : PluginSettings
     public int RefreshMinutes = 5;
     public int Season;
     public bool Contribute;
+    public bool UseTitrack = true;
+    public bool UseEtor = true;
+    public bool UseLocal;
+    public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
 
@@ -42,6 +47,21 @@ public sealed class Settings : PluginSettings
 
     public bool ShowsOnGround(GroundItem item) =>
         (item.Equipment || GroundNonEquipment) && Pick(item.RareValue, GroundGrey, GroundCyan, GroundPurple, GroundPink, GroundOrange);
+
+    public PriceSource[] Order() => [.. Priority.Distinct(), .. Enum.GetValues<PriceSource>().Except(Priority)];
+
+    bool Uses(PriceSource source) => source switch { PriceSource.Titrack => UseTitrack, PriceSource.Etor => UseEtor, _ => UseLocal };
+
+    [JsonIgnore] public PriceSource[] Active => [.. Order().Where(Uses)];
+
+    public void Move(int index, int delta)
+    {
+        var order = Order();
+        var to = index + delta;
+        if (index < 0 || index >= order.Length || to < 0 || to >= order.Length) return;
+        (order[index], order[to]) = (order[to], order[index]);
+        Priority = order;
+    }
 
     string _seasonText = "";
     bool _seasonEditing;
@@ -83,7 +103,36 @@ public sealed class Settings : PluginSettings
         _seasonEditing = ImGui.IsItemActive();
         if (entered) Season = int.TryParse(_seasonText, out var typed) ? Math.Max(0, typed) : 0;
         if (Status.Length > 0) ImGui.TextDisabled(Status);
+        DrawSources();
         Setting.Checkbox("Share Exchange prices", ref Contribute, "Reads the game log (Settings > Other > Enable Log) and sends the prices of your Exchange searches to TITrack's price server, the same way TITrack does. Off = nothing is read or sent");
         if (Contribute && ContributeStatus.Length > 0) ImGui.TextDisabled(ContributeStatus);
+    }
+
+    void DrawSources()
+    {
+        ImGui.SeparatorText("Price databases");
+        ImGui.TextDisabled("Higher in the list wins when two databases price the same item");
+        var order = Order();
+        for (var i = 0; i < order.Length; i++)
+        {
+            var source = order[i];
+            var on = Uses(source);
+            var changed = source switch
+            {
+                PriceSource.Titrack => Setting.Checkbox("TITrack", ref on, "TITrack's community price server - crowd-sourced Exchange searches, many items, some prices skewed by filtered searches", id: "UseTitrack"),
+                PriceSource.Etor => Setting.Checkbox("ETor", ref on, "ETor's community price server - only downloaded, nothing is sent. An unofficial interface, it can change or go away", id: "UseEtor"),
+                _ => Setting.Checkbox("Local", ref on, "Your own database, filled from the market screen - not built yet, does nothing for now", id: "UseLocal"),
+            };
+            if (changed)
+            {
+                if (source == PriceSource.Titrack) UseTitrack = on;
+                else if (source == PriceSource.Etor) UseEtor = on;
+                else UseLocal = on;
+            }
+            ImGui.SameLine(160);
+            if (i > 0 && ImGui.SmallButton("Up##" + source)) Move(i, -1);
+            ImGui.SameLine();
+            if (i < order.Length - 1 && ImGui.SmallButton("Down##" + source)) Move(i, 1);
+        }
     }
 }

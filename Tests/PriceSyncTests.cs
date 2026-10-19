@@ -48,13 +48,18 @@ public sealed class PriceSyncTests
 
     static string Reply(HttpRequestMessage request) => request.RequestUri!.AbsolutePath.EndsWith("get_available_seasons") ? Seasons : Page(1, 2);
 
-    static Main Syncing(Stub stub, long[]? clock = null) => new()
+    static Main Syncing(Stub stub, long[]? clock = null)
     {
-        DataDirectory = TempPath(),
-        Http = new HttpClient(stub),
-        Job = new BackgroundJob<Synced>(inline: true),
-        Clock = () => clock?[0] ?? 0,
-    };
+        var plugin = new Main
+        {
+            DataDirectory = TempPath(),
+            Http = new HttpClient(stub),
+            Job = new BackgroundJob<Synced>(inline: true),
+            Clock = () => clock?[0] ?? 0,
+        };
+        plugin.Settings.UseEtor = false;
+        return plugin;
+    }
 
     sealed class Silent : HttpMessageHandler
     {
@@ -305,6 +310,22 @@ public sealed class PriceSyncTests
         plugin.Tick();
         Check.Equal(0, plugin.Prices.Count);
         Check.That(plugin.Settings.Status.StartsWith("download failed: down"), plugin.Settings.Status);
+        Clean(plugin);
+    }
+
+    [Test]
+    public void ChangingTheEnabledDatabasesRefreshesAtOnce()
+    {
+        var stub = new Stub(Reply);
+        var plugin = Syncing(stub, new long[1]);
+        plugin.Settings.Season = 1601;
+        plugin.Tick();
+        plugin.Tick();
+        Check.That(stub.Urls.TrueForAll(url => url.Contains("/rest/v1/")), "TITrack only at first");
+        stub.Urls.Clear();
+        plugin.Settings.UseEtor = true;
+        plugin.Tick();
+        Check.That(stub.Urls.Exists(url => url.Contains("prices-snapshot")), "ETor asked right after the toggle");
         Clean(plugin);
     }
 

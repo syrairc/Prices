@@ -22,9 +22,9 @@ public sealed class Main : Plugin<Settings>
     IReadOnlyDictionary<int, Price> _prices = NoPrices;
     HttpClient? _http;
     long _nextAt;
-    (int, int?) _seasonKey;
-    (int, int?) _jobKey;
-    (int, int?)? _fullKey;
+    (int, int?, string) _seasonKey;
+    (int, int?, string) _jobKey;
+    (int, int?, string)? _fullKey;
     int? _heldSeason;
     Contribution? _contribution;
     CancellationTokenSource? _stopContributing;
@@ -56,8 +56,7 @@ public sealed class Main : Plugin<Settings>
     public override void OnEnable()
     {
         _fullKey = null;
-        if (PriceSync.CachedPath(DataDirectory, Settings.Season, LogSeason) is { } path && PriceSync.Load(path) is { } file)
-            Apply(new Synced(file, file.Season, "cached", null), File.GetLastWriteTime(path));
+        if (PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);
     }
 
     public override void Tick()
@@ -67,22 +66,25 @@ public sealed class Main : Plugin<Settings>
         if (Job.TakeFinished() is { } done)
         {
             var result = done.GetAwaiter().GetResult();
-            if (_jobKey == (Settings.Season, LogSeason))
+            if (_jobKey == (Settings.Season, LogSeason, SourceKey))
             {
                 Apply(result);
                 if (result.Error is null) _fullKey = _jobKey;
             }
             _nextAt = Clock() + Math.Max(Settings.MinRefreshMinutes, Settings.RefreshMinutes) * 60_000L;
         }
-        var seasonKey = (Settings.Season, LogSeason);
+        var seasonKey = (Settings.Season, LogSeason, SourceKey);
         if (seasonKey != _seasonKey) _nextAt = 0;
         if (!(Settings.Enabled || Settings.GroundEnabled) || Job.Running || Clock() < _nextAt) return;
         _seasonKey = _jobKey = seasonKey;
         var http = Http;
         var directory = DataDirectory;
         var full = _fullKey != seasonKey;
-        Job.Start(() => PriceSync.Sync(http, directory, seasonKey.Season, seasonKey.LogSeason, full));
+        var active = Settings.Active;
+        Job.Start(() => PriceSources.Sync(http, directory, active, seasonKey.Item1, seasonKey.Item2, full));
     }
+
+    string SourceKey => string.Join(',', Settings.Active);
 
     public override void OnDisable() => StopContributing();
 
@@ -188,7 +190,8 @@ public sealed class Main : Plugin<Settings>
             _heldSeason = season;
         }
         var from = result.Season is { } shown ? $"season {shown} ({result.Source})" : "no season";
-        Settings.Status = result.Error is { } error ? $"download failed: {error} - {from}" : $"{_prices.Count} prices, {from}, updated {at ?? DateTime.Now:HH:mm}";
+        var databases = result.Databases.Length > 0 ? $" from {result.Databases}" : "";
+        Settings.Status = result.Error is { } error ? $"download failed: {error} - {from}" : $"{_prices.Count} prices{databases}, {from}, updated {at ?? DateTime.Now:HH:mm}";
     }
 
     public override void Render()
