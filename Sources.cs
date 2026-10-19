@@ -157,26 +157,26 @@ public static class PriceSources
         var used = active.Where(tables.ContainsKey).ToArray();
         if (used.Length == 0) return new Synced(null, id, source, error);
         var merged = Combine(used.Select(s => tables[s]));
-        return new Synced(new PriceFile(id, titrack?.File?.Newest, merged), id, source, error, string.Join(", ", used.Select(Name)));
+        return new Synced(new PriceFile(id, titrack?.File?.Newest, merged), id, source, error, string.Join(", ", used.Select(Name)), tables);
     }
 
     public static (Synced Synced, DateTime At)? Cached(string directory, PriceSource[] active, int setting, int? log)
     {
         if (PriceSync.CachedSeason(directory, setting, log) is not { } season) return null;
-        var tables = new List<IReadOnlyDictionary<int, Price>>();
+        var tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
         var names = new List<string>();
         var at = DateTime.MinValue;
         foreach (var source in active)
         {
             var path = source switch { PriceSource.Titrack => Path.Combine(directory, $"prices-{season}.json"), PriceSource.Etor => EtorSync.CachePath(directory, season), _ => null };
             if (path is null || PriceSync.Load(path) is not { } file) continue;
-            tables.Add(file.Rows);
+            tables[source] = file.Rows;
             names.Add(Name(source));
             var written = File.GetLastWriteTime(path);
             if (written > at) at = written;
         }
         if (tables.Count == 0) return null;
-        return (new Synced(new PriceFile(season, null, Combine(tables)), season, "cached", null, string.Join(", ", names)), at);
+        return (new Synced(new PriceFile(season, null, Combine(tables.Values)), season, "cached", null, string.Join(", ", names), tables), at);
     }
 
     static void TrySave(string path, PriceFile file)

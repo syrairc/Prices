@@ -182,6 +182,7 @@ public sealed class Main : Plugin<Settings>
         if (result.File is { } file)
         {
             Prices = file.Rows;
+            Settings.Tables = result.Tables ?? Settings.Tables;
             _heldSeason = result.Season;
         }
         else if (result.Season is { } season && _heldSeason is { } held && held != season)

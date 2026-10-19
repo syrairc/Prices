@@ -12,7 +12,7 @@ namespace Prices;
 
 public sealed record PriceFile(int Season, string? Newest, Dictionary<int, Price> Rows);
 
-public sealed record Synced(PriceFile? File, int? Season, string Source, string? Error, string Databases = "");
+public sealed record Synced(PriceFile? File, int? Season, string Source, string? Error, string Databases = "", IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>>? Tables = null);
 
 public static class PriceSync
 {

@@ -178,11 +178,28 @@ public sealed class SourcesTests
         var settings = new Settings { UseTitrack = true, UseEtor = true, UseLocal = false, Priority = [PriceSource.Titrack] };
         Check.That(settings.Order().SequenceEqual([PriceSource.Titrack, PriceSource.Etor, PriceSource.Local]), "missing sources are appended");
         Check.That(settings.Active.SequenceEqual([PriceSource.Titrack, PriceSource.Etor]), "only enabled ones, in order");
-        settings.Move(1, -1);
-        Check.That(settings.Active.SequenceEqual([PriceSource.Etor, PriceSource.Titrack]), "moved up");
-        settings.Move(0, -1);
-        settings.Move(2, 1);
-        Check.That(settings.Order().SequenceEqual([PriceSource.Etor, PriceSource.Titrack, PriceSource.Local]), "moves past the ends are ignored");
         Check.That(new Settings { Priority = [PriceSource.Etor, PriceSource.Etor] }.Order().Length == 3, "duplicates collapse");
+    }
+
+    [Test]
+    public void SyncKeepsEachDatabaseTableForTheViewer()
+    {
+        var directory = TempPath();
+        var synced = Sync(new Stub(Reply), directory, [PriceSource.Etor, PriceSource.Titrack]);
+        Check.Equal(2, synced.Tables![PriceSource.Etor].Count);
+        Check.Equal(2, synced.Tables[PriceSource.Titrack].Count);
+        Check.Equal(50f, synced.Tables[PriceSource.Titrack][1].Median);
+        var cached = PriceSources.Cached(directory, [PriceSource.Etor, PriceSource.Titrack], 1601, null)!.Value;
+        Check.Equal(2, cached.Synced.Tables![PriceSource.Titrack].Count);
+        Directory.Delete(directory, true);
+    }
+
+    [Test]
+    public void ViewerRowsAreSortedByBaseId()
+    {
+        var rows = Settings.Rows(new Dictionary<int, Price> { [9] = new(1, null, null), [3] = new(2, 1, 4) });
+        Check.Equal(3, rows[0].BaseId);
+        Check.Equal(4f, rows[0].High ?? 0);
+        Check.Equal(9, rows[1].BaseId);
     }
 }

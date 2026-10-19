@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -30,6 +31,7 @@ public sealed class Settings : PluginSettings
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
+    [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
     public bool GroundEnabled = true;
     public bool GroundGrey;
@@ -54,19 +56,51 @@ public sealed class Settings : PluginSettings
 
     [JsonIgnore] public PriceSource[] Active => [.. Order().Where(Uses)];
 
-    public void Move(int index, int delta)
+    public sealed record Row(int BaseId, float Median, float? Low, float? High);
+
+    public static List<Row> Rows(IReadOnlyDictionary<int, Price> table) => [.. table.OrderBy(pair => pair.Key).Select(pair => new Row(pair.Key, pair.Value.Median, pair.Value.Low, pair.Value.High))];
+
+    static readonly TableColumn<Row>[] DatabaseColumns =
+    [
+        new() { Header = "Base ID", Width = 90, SortKey = row => row.BaseId, Draw = (row, _) => ImGui.TextUnformatted(row.BaseId.ToString()) },
+        new() { Header = "Price (FE)", Width = 110, SortKey = row => row.Median, Draw = (row, _) => ImGui.TextUnformatted(Number(row.Median)) },
+        new() { Header = "Low", Width = 110, SortKey = row => row.Low ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Low is { } low ? Number(low) : "-") },
+        new() { Header = "High", SortKey = row => row.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.High is { } high ? Number(high) : "-") },
+    ];
+
+    static string Number(float value) => value.ToString(value < 10 ? "0.###" : "0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    PriceSource _view = PriceSource.Titrack;
+    string _filter = "";
+    IReadOnlyDictionary<int, Price>? _viewTable;
+    List<Row> _rows = [];
+
+    internal void DrawDatabase()
     {
-        var order = Order();
-        var to = index + delta;
-        if (index < 0 || index >= order.Length || to < 0 || to >= order.Length) return;
-        (order[index], order[to]) = (order[to], order[index]);
-        Priority = order;
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted("Database");
+        ImGui.SameLine(160);
+        Combo.Enum(ref _view, "dbview");
+        var table = Tables.TryGetValue(_view, out var found) ? found : null;
+        if (!ReferenceEquals(table, _viewTable))
+        {
+            _viewTable = table;
+            _rows = table is null ? [] : Rows(table);
+        }
+        ImGui.SameLine();
+        ImGui.TextDisabled($"{_rows.Count} items, season prices as last downloaded");
+        if (_rows.Count == 0)
+        {
+            ImGui.TextDisabled(Uses(_view) ? "Nothing loaded from this database yet" : "This database is turned off");
+            return;
+        }
+        SortableTable.Draw("database", _rows, DatabaseColumns, ref _filter, row => row.BaseId.ToString(), ImGui.GetContentRegionAvail().Y);
     }
 
     string _seasonText = "";
     bool _seasonEditing;
 
-    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround));
+    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround), ("Database", DrawDatabase));
 
     internal void DrawGround()
     {
@@ -108,31 +142,32 @@ public sealed class Settings : PluginSettings
         if (Contribute && ContributeStatus.Length > 0) ImGui.TextDisabled(ContributeStatus);
     }
 
+    int _selectedSource;
+
+    static string Tip(PriceSource source) => source switch
+    {
+        PriceSource.Titrack => "TITrack's community price server - crowd-sourced Exchange searches, many items, some prices skewed by filtered searches",
+        PriceSource.Etor => "ETor's community price server - only downloaded, nothing is sent. An unofficial interface, it can change or go away",
+        _ => "Your own database, filled from the market screen - not built yet, does nothing for now",
+    };
+
     void DrawSources()
     {
         ImGui.SeparatorText("Price databases");
-        ImGui.TextDisabled("Higher in the list wins when two databases price the same item");
-        var order = Order();
-        for (var i = 0; i < order.Length; i++)
+        ImGui.TextDisabled("Drag to reorder - higher in the list wins when two databases price the same item");
+        List<PriceSource> order = [.. Order()];
+        if (ListEditor.ReorderableList("sources", order, ref _selectedSource, (source, _) =>
         {
-            var source = order[i];
             var on = Uses(source);
-            var changed = source switch
-            {
-                PriceSource.Titrack => Setting.Checkbox("TITrack", ref on, "TITrack's community price server - crowd-sourced Exchange searches, many items, some prices skewed by filtered searches", id: "UseTitrack"),
-                PriceSource.Etor => Setting.Checkbox("ETor", ref on, "ETor's community price server - only downloaded, nothing is sent. An unofficial interface, it can change or go away", id: "UseEtor"),
-                _ => Setting.Checkbox("Local", ref on, "Your own database, filled from the market screen - not built yet, does nothing for now", id: "UseLocal"),
-            };
-            if (changed)
+            if (ImGui.Checkbox("##use", ref on))
             {
                 if (source == PriceSource.Titrack) UseTitrack = on;
                 else if (source == PriceSource.Etor) UseEtor = on;
                 else UseLocal = on;
             }
-            ImGui.SameLine(160);
-            if (i > 0 && ImGui.SmallButton("Up##" + source)) Move(i, -1);
             ImGui.SameLine();
-            if (i < order.Length - 1 && ImGui.SmallButton("Down##" + source)) Move(i, 1);
-        }
+            ImGui.TextUnformatted(source == PriceSource.Titrack ? "TITrack" : source.ToString());
+            EmberHUD.Ui.Text.Tip(Tip(source));
+        }, new ListOpts { ShowIndex = true })) Priority = [.. order];
     }
 }
