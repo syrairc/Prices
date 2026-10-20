@@ -109,12 +109,12 @@ public sealed partial class Settings : PluginSettings
 
     static void Amount(float? value) => Controls.AmountCell(value is { } v ? Number(v) : "-", value is null ? null : LocalListings.FeIcon);
 
-    internal static HashSet<int> LegendaryBases = [];
+    internal static HashSet<int> LegendaryIds = [];
 
     static void DrawBase(int baseId)
     {
         var name = ItemNames.Of(baseId);
-        if (LegendaryBases.Contains(baseId)) ImGui.TextColored(EColor.ToVector4(GameColors.LegendaryName), name);
+        if (LegendaryIds.Contains(baseId)) ImGui.TextColored(EColor.ToVector4(GameColors.LegendaryName), name);
         else ImGui.TextUnformatted(name);
     }
 
@@ -160,20 +160,20 @@ public sealed partial class Settings : PluginSettings
     IReadOnlyDictionary<int, Price>? _viewTable;
     List<Row> _rows = [];
 
-    LocalBook? _legendaryBasesBook;
-    int _legendaryBasesVersion = -1;
+    LocalBook? _legendaryIdsBook;
+    int _legendaryIdsVersion = -1;
 
-    void RefreshLegendaryBases()
+    void RefreshLegendaryIds()
     {
-        if (ReferenceEquals(Book, _legendaryBasesBook) && (Book?.Version ?? -1) == _legendaryBasesVersion) return;
-        _legendaryBasesBook = Book;
-        _legendaryBasesVersion = Book?.Version ?? -1;
-        LegendaryBases = Book is null ? [] : [.. Book.Rows.Where(row => row.SpecialId != 0).Select(row => row.BaseId)];
+        if (ReferenceEquals(Book, _legendaryIdsBook) && (Book?.Version ?? -1) == _legendaryIdsVersion) return;
+        _legendaryIdsBook = Book;
+        _legendaryIdsVersion = Book?.Version ?? -1;
+        LegendaryIds = Book is null ? [] : [.. Book.Rows.Where(row => row.SpecialId != 0).Select(row => row.SpecialId)];
     }
 
     internal void DrawDatabase()
     {
-        RefreshLegendaryBases();
+        RefreshLegendaryIds();
         ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted("Database");
         ImGui.SameLine(160);
