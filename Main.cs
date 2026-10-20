@@ -20,7 +20,7 @@ public sealed class Main : Plugin<Settings>
 
     static readonly Dictionary<int, Price> NoPrices = [];
 
-    readonly Dictionary<(int BaseId, int Count, bool Gear), string> _tags = [];
+    readonly Dictionary<(int BaseId, int Count, bool Gear, ulong Legendary, bool Unidentified), string> _tags = [];
     IReadOnlyDictionary<int, Price> _prices = NoPrices;
     HttpClient? _http;
     long _nextAt;
@@ -34,6 +34,7 @@ public sealed class Main : Plugin<Settings>
     LocalBook? _book;
     int? _bookSeason;
     IReadOnlyDictionary<int, Price>? _local;
+    LegendaryPrices? _localLegendary;
     TradeGood[]? _lastGoods;
     bool _localChanged, _rebuild;
     long _nextLocalAt, _nextFlushAt, _nextPurgeAt;
@@ -62,6 +63,8 @@ public sealed class Main : Plugin<Settings>
     internal int? LogSeason { get; set; }
 
     internal LocalBook? Book => _book;
+
+    internal LegendaryPrices? Legendary { get; private set; }
 
     internal int StashTabsSeen => _stashTabs.Count;
 
@@ -226,8 +229,11 @@ public sealed class Main : Plugin<Settings>
         _builtKey = BuildKey;
         var tables = AllTables();
         Settings.Tables = tables;
-        if (tables.Count == 0) return _synced?.File?.Rows ?? NoPrices;
         DateTimeOffset? notBefore = Settings.IgnoreOlderThanDays > 0 ? DateTimeOffset.FromUnixTimeSeconds(UnixClock()) - TimeSpan.FromDays(Settings.IgnoreOlderThanDays) : null;
+        Legendary = Settings.UseLocal ? _localLegendary?.Filtered(Settings.MinSamples, notBefore) : null;
+        Settings.Legendaries = Legendary;
+        _tags.Clear();
+        if (tables.Count == 0) return _synced?.File?.Rows ?? NoPrices;
         return PriceSources.Combine(Settings.Active.Where(tables.ContainsKey).Select(source => tables[source]), Settings.MinSamples, notBefore);
     }
 
@@ -239,7 +245,7 @@ public sealed class Main : Plugin<Settings>
         {
             if (_book is null) return;
             FlushBook();
-            (_book, _bookSeason, _local, _localChanged, _rebuild) = (null, null, null, false, true);
+            (_book, _bookSeason, _local, _localLegendary, _localChanged, _rebuild) = (null, null, null, null, false, true);
             return;
         }
         Game.WantTradeGoods();
@@ -253,6 +259,7 @@ public sealed class Main : Plugin<Settings>
         if (_localChanged && now >= _nextLocalAt)
         {
             _local = _book!.Prices(now, LocalBook.Recent);
+            _localLegendary = _book.Legendary(now, LocalBook.Recent);
             (_localChanged, _rebuild, _nextLocalAt) = (false, true, now + 5);
         }
         // ponytail: flushed on the main thread, a few hundred lines per 5 s is nothing - move to the job if a scan ever grows to tens of thousands
@@ -331,12 +338,12 @@ public sealed class Main : Plugin<Settings>
         if (!Settings.ShowTotals || OpenKind(state.Ui) is null) return;
         Game.WantInventory();
         _totals.Clear();
-        if (state.Inventory is { } inventory) _totals.Add(("Inventory", Fe(Tags.Total(inventory, _prices))));
+        if (state.Inventory is { } inventory) _totals.Add(("Inventory", Fe(Tags.Total(inventory, _prices, Legendary))));
         if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
         {
             var all = 0.0;
-            foreach (var items in _stashTabs.Values) all += Tags.Total(items, _prices);
-            _totals.Add(("Stash tab", Fe(Tags.Total(tab, _prices))));
+            foreach (var items in _stashTabs.Values) all += Tags.Total(items, _prices, Legendary);
+            _totals.Add(("Stash tab", Fe(Tags.Total(tab, _prices, Legendary))));
             _totals.Add(($"Stash ({_stashTabs.Count} {(_stashTabs.Count == 1 ? "tab" : "tabs")} seen)", Fe(all)));
         }
         if (_totals.Count == 0) return;
@@ -386,7 +393,7 @@ public sealed class Main : Plugin<Settings>
         using var clip = Draw.Clip(clipMin, clipMax);
         foreach (var item in items)
         {
-            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item.BaseId, item.Count, item.Bag == InventoryBag.Equipment) is not { } text) continue;
+            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item.BaseId, item.Count, item.Bag == InventoryBag.Equipment, item.SpecialId, item.Unidentified, item.PrefixIds, item.SuffixIds) is not { } text) continue;
             foreach (var cell in cells)
             {
                 if (cell.Slot != item.Slot) continue;
@@ -402,7 +409,7 @@ public sealed class Main : Plugin<Settings>
         var icon = TagIcon(out var hasIcon);
         foreach (var item in items)
         {
-            if (!Settings.ShowsOnGround(item) || TagFor(item.BaseId, item.Count, item.Equipment) is not { } text) continue;
+            if (!Settings.ShowsOnGround(item) || TagFor(item.BaseId, item.Count, item.Equipment, item.SpecialId, item.PrefixIds.Length + item.SuffixIds.Length == 0, item.PrefixIds, item.SuffixIds) is not { } text) continue;
             DrawTag(text, icon, hasIcon, size => new Vector2(item.LabelMax.X + GroundGap, (item.LabelMin.Y + item.LabelMax.Y - size.Y) / 2));
         }
     }
@@ -435,11 +442,14 @@ public sealed class Main : Plugin<Settings>
         return null;
     }
 
-    string? TagFor(int baseId, int count, bool gear)
+    internal string? TagFor(int baseId, int count, bool gear, int specialId = 0, bool unidentified = false, int[]? prefixIds = null, int[]? suffixIds = null)
     {
-        var key = (baseId, count, gear);
+        int[] affixIds = specialId == 0 ? [] : [.. prefixIds ?? [], .. suffixIds ?? []];
+        var key = (baseId, count, gear, specialId == 0 ? 0 : LegendaryPrices.Key(specialId, affixIds), specialId != 0 && unidentified);
         if (_tags.TryGetValue(key, out var text)) return text;
-        text = Tags.Text(baseId, count, gear, _prices);
+        text = specialId != 0 && Legendary?.Of(specialId, unidentified, affixIds) is { } special
+            ? Tags.Text(special, 1, gear) is { } priced ? (unidentified ? "?" + priced : priced) : null
+            : Tags.Text(baseId, count, gear, _prices);
         if (text is not null) _tags[key] = text;
         return text;
     }

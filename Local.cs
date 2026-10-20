@@ -79,6 +79,8 @@ public sealed class LocalRow
         return rolled.Length == 0 && bases.Length == 0 ? "" : $"A:{rolled};B:{bases}";
     }
 
+    [JsonIgnore] public ulong VariantKey => LegendaryPrices.Key(SpecialId, (Affixes ?? []).Where(affix => affix.Kind is TradeAffixKind.Prefix or TradeAffixKind.Suffix).Select(affix => affix.Id));
+
     // legendaries have no tiers: the same special id with a different set of modifiers (or corroded) is its own variant
     [JsonIgnore] public string Variant => SpecialId == 0 ? "" : $"{SpecialId}:{string.Join(',', (Affixes ?? []).Select(affix => affix.Id).Order())}{(Corrode ? ":c" : "")}{(Unidentified ? ":u" : "")}";
 }
@@ -220,18 +222,46 @@ public sealed class LocalBook
             list.Add(((double)row.Price / row.Quantity, row.LastSeen));
         }
         var prices = new Dictionary<int, Price>();
-        foreach (var (baseId, list) in groups)
-        {
-            list.Sort((a, b) => a.Unit.CompareTo(b.Unit));
-            var q1 = list[list.Count / 4].Unit;
-            var q3 = list[list.Count * 3 / 4].Unit;
-            var fence = (q3 - q1) * 1.5;
-            var kept = list.Where(entry => entry.Unit >= q1 - fence && entry.Unit <= q3 + fence).ToList();
-            var units = kept.Select(entry => entry.Unit).ToArray();
-            var newest = kept.Max(entry => entry.Seen);
-            prices[baseId] = new Price((float)Exchange.ReferencePrice(units), (float)units[0], (float)units[(int)((units.Length - 1) * 0.9)], DateTimeOffset.FromUnixTimeSeconds(newest), units.Length, 1);
-        }
+        foreach (var (baseId, list) in groups) prices[baseId] = Pick(list);
         return prices;
+    }
+
+    internal static Price Pick(List<(double Unit, long Seen)> list)
+    {
+        list.Sort((a, b) => a.Unit.CompareTo(b.Unit));
+        var q1 = list[list.Count / 4].Unit;
+        var q3 = list[list.Count * 3 / 4].Unit;
+        var fence = (q3 - q1) * 1.5;
+        var kept = list.Where(entry => entry.Unit >= q1 - fence && entry.Unit <= q3 + fence).ToList();
+        var units = kept.Select(entry => entry.Unit).ToArray();
+        var newest = kept.Max(entry => entry.Seen);
+        return new Price((float)Exchange.ReferencePrice(units), (float)units[0], (float)units[(int)((units.Length - 1) * 0.9)], DateTimeOffset.FromUnixTimeSeconds(newest), units.Length, 1);
+    }
+
+    public LegendaryPrices Legendary(long nowUnix, TimeSpan window)
+    {
+        var cutoff = nowUnix - (long)window.TotalSeconds;
+        var unidentified = new Dictionary<int, List<(double, long)>>();
+        var identified = new Dictionary<int, List<(double, long)>>();
+        var variants = new Dictionary<ulong, List<(double, long)>>();
+        static void AddTo<TKey>(Dictionary<TKey, List<(double, long)>> groups, TKey key, (double, long) entry) where TKey : notnull
+        {
+            if (!groups.TryGetValue(key, out var list)) groups[key] = list = [];
+            list.Add(entry);
+        }
+        foreach (var row in _rows.Values)
+        {
+            if (row.Commodity || row.SpecialId == 0 || row.Sold || row.Quantity <= 0 || row.LastSeen < cutoff) continue;
+            var entry = ((double)row.Price / row.Quantity, row.LastSeen);
+            if (row.Unidentified) AddTo(unidentified, row.SpecialId, entry);
+            else
+            {
+                AddTo(identified, row.SpecialId, entry);
+                AddTo(variants, row.VariantKey, entry);
+            }
+        }
+        static Dictionary<TKey, Price> Priced<TKey>(Dictionary<TKey, List<(double, long)>> groups) where TKey : notnull => groups.ToDictionary(pair => pair.Key, pair => Pick(pair.Value));
+        return new LegendaryPrices(Priced(unidentified), Priced(identified), Priced(variants));
     }
 
     public int Purge(long cutoffUnix)

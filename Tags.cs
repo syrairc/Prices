@@ -28,17 +28,24 @@ public static class Tags
 
     public static string? Text(int baseId, int count, bool gear, IReadOnlyDictionary<int, Price> prices)
     {
-        if (!prices.TryGetValue(baseId, out var price)) return null;
+        return prices.TryGetValue(baseId, out var price) ? Text(price, count, gear) : null;
+    }
+
+    public static string? Text(Price price, int count, bool gear)
+    {
         if (gear && price.Low is { } low && price.High is { } high && low != high && Format(low) is { } from && Format(high) is { } to)
             return $"{from}-{to}";
         return Format(price.Median * count);
     }
 
-    public static double Total(IEnumerable<InventoryItem> items, IReadOnlyDictionary<int, Price> prices)
+    public static double Total(IEnumerable<InventoryItem> items, IReadOnlyDictionary<int, Price> prices, LegendaryPrices? legendary = null)
     {
         var total = 0.0;
         foreach (var item in items)
-            if (prices.TryGetValue(item.BaseId, out var price)) total += (double)price.Median * item.Count;
+        {
+            if (item.SpecialId != 0 && legendary?.Of(item.SpecialId, item.Unidentified, [.. item.PrefixIds, .. item.SuffixIds]) is { } special) total += special.Median;
+            else if (prices.TryGetValue(item.BaseId, out var price)) total += (double)price.Median * item.Count;
+        }
         return total;
     }
 

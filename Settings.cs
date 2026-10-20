@@ -38,6 +38,8 @@ public sealed class Settings : PluginSettings
     [JsonIgnore] public string PurgeResult = "";
     [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
+    [JsonIgnore] public LegendaryPrices? Legendaries;
+
     public bool ShowTotals = true;
     public bool Lock = true;
     public Hotkey MoveKey = new(Key.Alt);
@@ -85,6 +87,38 @@ public sealed class Settings : PluginSettings
 
     static string Number(float value) => value.ToString(value < 10 ? "0.###" : "0.#", System.Globalization.CultureInfo.InvariantCulture);
 
+    static readonly TableColumn<LegendaryEntry>[] LegendaryColumns =
+    [
+        new() { Header = "Name", SortKey = row => ItemNames.Of(row.SpecialId), Draw = (row, _) => ImGui.TextUnformatted(ItemNames.Of(row.SpecialId)) },
+        new() { Header = "State", Width = 100, SortKey = row => row.Unidentified, Draw = (row, _) => ImGui.TextUnformatted(row.Unidentified ? "Unidentified" : "Identified") },
+        new() { Header = "Price (FE)", Width = 110, SortKey = row => row.Price.Median, Draw = (row, _) => ImGui.TextUnformatted(Number(row.Price.Median)) },
+        new() { Header = "Low", Width = 110, SortKey = row => row.Price.Low ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Low is { } low ? Number(low) : "-") },
+        new() { Header = "High", Width = 110, SortKey = row => row.Price.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Price.High is { } high ? Number(high) : "-") },
+        new() { Header = "Samples", Width = 80, SortKey = row => row.Price.Submissions ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Submissions?.ToString() ?? "-") },
+        new() { Header = "Updated", Width = 130, SortKey = row => row.Price.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
+    ];
+
+    bool _showLegendaries;
+    string _legendaryFilter = "";
+    LegendaryPrices? _viewLegendaries;
+    List<LegendaryEntry> _legendaryRows = [];
+
+    void DrawLegendaries()
+    {
+        if (!ReferenceEquals(Legendaries, _viewLegendaries))
+        {
+            _viewLegendaries = Legendaries;
+            _legendaryRows = Legendaries is null ? [] : [.. Legendaries.Entries];
+        }
+        ImGui.TextDisabled($"{_legendaryRows.Count} legendaries");
+        if (_legendaryRows.Count == 0)
+        {
+            ImGui.TextDisabled("No legendary listings scanned yet");
+            return;
+        }
+        SortableTable.Draw("legendaries", _legendaryRows, LegendaryColumns, ref _legendaryFilter, row => ItemNames.Of(row.SpecialId) + " " + (row.Unidentified ? "Unidentified" : "Identified"), ImGui.GetContentRegionAvail().Y);
+    }
+
     PriceSource _view = PriceSource.Titrack;
     string _filter = "";
     IReadOnlyDictionary<int, Price>? _viewTable;
@@ -96,6 +130,16 @@ public sealed class Settings : PluginSettings
         ImGui.TextUnformatted("Database");
         ImGui.SameLine(160);
         Combo.Enum(ref _view, "dbview");
+        if (_view == PriceSource.Local)
+        {
+            ImGui.SameLine();
+            ImGui.Checkbox("Legendaries##dbleg", ref _showLegendaries);
+            if (_showLegendaries)
+            {
+                DrawLegendaries();
+                return;
+            }
+        }
         var table = Tables.TryGetValue(_view, out var found) ? found : null;
         if (!ReferenceEquals(table, _viewTable))
         {
