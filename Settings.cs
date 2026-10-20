@@ -131,7 +131,7 @@ public sealed partial class Settings : PluginSettings
         new() { Header = "Updated", Width = 130, SortKey = row => row.Price.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
     ];
 
-    enum LocalView { Prices, Legendaries, Listings }
+    enum LocalView { Commodities, Legendaries, Listings }
 
     LocalView _localView;
     readonly LocalListings _listings = new();
@@ -203,7 +203,7 @@ public sealed partial class Settings : PluginSettings
         ImGui.TextDisabled($"{_rows.Count} items");
         if (_rows.Count == 0)
         {
-            ImGui.TextDisabled(Uses(_view) ? "Nothing loaded from this database yet" : "This database is turned off");
+            ImGui.TextDisabled(!Uses(_view) ? "This database is turned off" : _view == PriceSource.Local ? "No commodity listings saved yet - search commodities in the trade house" : "Nothing loaded from this database yet");
             return;
         }
         SortableTable.Draw("database", _rows, DatabaseColumns, ref _filter, row => row.BaseId + " " + ItemNames.Of(row.BaseId), ImGui.GetContentRegionAvail().Y);
