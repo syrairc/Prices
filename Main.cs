@@ -8,6 +8,7 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberHUD;
+using EmberHUD.Ui;
 
 namespace Prices;
 
@@ -31,6 +32,11 @@ public sealed class Main : Plugin<Settings>
     int _builtMin;
     Contribution? _contribution;
     CancellationTokenSource? _stopContributing;
+    readonly Dictionary<int, InventoryItem[]> _stashTabs = [];
+    readonly List<(string Left, string Right)> _totals = new(3);
+    readonly TextStyle _totalStyle = TextStyle.Hud();
+    readonly Overlay _overlay = new();
+    int _unusedWidth, _unusedHeight;
 
     internal string DataDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Config", "Prices");
 
@@ -45,6 +51,8 @@ public sealed class Main : Plugin<Settings>
     internal Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
     internal int? LogSeason { get; set; }
+
+    internal int StashTabsSeen => _stashTabs.Count;
 
     public IReadOnlyDictionary<int, Price> Prices
     {
@@ -210,8 +218,49 @@ public sealed class Main : Plugin<Settings>
     public override void Render()
     {
         DrawInventory();
+        DrawTotals();
         DrawGround();
     }
+
+    void DrawTotals()
+    {
+        var state = Game.State;
+        if (state.Stash is { } shown && state.StashItems is { } shownItems) _stashTabs[shown.Tab] = shownItems;
+        if (!Settings.ShowTotals || OpenKind(state.Ui) is null) return;
+        Game.WantInventory();
+        _totals.Clear();
+        if (state.Inventory is { } inventory) _totals.Add(("Inventory", Fe(Tags.Total(inventory, _prices))));
+        if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
+        {
+            var all = 0.0;
+            foreach (var items in _stashTabs.Values) all += Tags.Total(items, _prices);
+            _totals.Add(("Stash tab", Fe(Tags.Total(tab, _prices))));
+            _totals.Add(($"Stash ({_stashTabs.Count} {(_stashTabs.Count == 1 ? "tab" : "tabs")} seen)", Fe(all)));
+        }
+        if (_totals.Count == 0) return;
+
+        const float Pad = 8;
+        const float Gap = 24;
+        var width = 0f;
+        foreach (var (left, right) in _totals) width = MathF.Max(width, Draw.MeasureText(left, _totalStyle).X + Gap + Draw.MeasureText(right, _totalStyle).X);
+        var rowHeight = Draw.RowHeight(_totalStyle);
+        _overlay.Locked = Settings.Lock;
+        _overlay.MoveHeld = Settings.MoveKey.Key != Key.None && Input.IsDown(Settings.MoveKey.Key);
+        var origin = new Vector2(Settings.PanelX, Settings.PanelY);
+        var size = new Vector2(width + Pad * 2, rowHeight * _totals.Count + Pad * 2);
+        var (hovered, _, active) = _overlay.Handle("prices-totals", ref origin, size, ref Settings.PanelX, ref Settings.PanelY, ref _unusedWidth, 60, 4000, ref _unusedHeight, 0, 0, Overlay.ResizeEdge.None);
+        if (hovered || active) Overlay.ClickBlocker("prices-totals", origin, size);
+        Draw.RectFilled(origin, origin + size, GameColors.LabelBackground, 4);
+        if (_overlay.Movable) Overlay.DragHint(origin, origin + size, active, hovered, Overlay.ResizeEdge.None);
+        var y = origin.Y + Pad;
+        foreach (var (left, right) in _totals)
+        {
+            Draw.Row(new Vector2(origin.X + Pad, y), width, left, right, _totalStyle);
+            y += rowHeight;
+        }
+    }
+
+    static string Fe(double fe) => (Tags.Format(fe) ?? "0") + " FE";
 
     void DrawInventory()
     {

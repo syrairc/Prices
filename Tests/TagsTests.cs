@@ -10,6 +10,14 @@ public sealed class TagsTests
     static InventoryItem Item(InventoryBag bag, int baseId, int count) => new(bag, 0, "id", baseId, 0, 0, 0, count, 0, 0);
 
     [Test]
+    public void TotalSumsMedianTimesCountSkippingUnpriced()
+    {
+        var prices = new Dictionary<int, Price> { [1] = new(2.5f, null, null), [2] = new(100, 50, 300) };
+        Check.Equal(0.0, Tags.Total([], prices));
+        Check.Equal(2.5 * 4 + 100, Tags.Total([Item(InventoryBag.Commodities, 1, 4), Item(InventoryBag.Equipment, 2, 1), Item(InventoryBag.Other, 99, 7)], prices));
+    }
+
+    [Test]
     public void FormatMatchesTheSpec()
     {
         Check.Equal("0.4", Tags.Format(0.4));

@@ -34,6 +34,14 @@ public static class Tags
         return Format(price.Median * count);
     }
 
+    public static double Total(IEnumerable<InventoryItem> items, IReadOnlyDictionary<int, Price> prices)
+    {
+        var total = 0.0;
+        foreach (var item in items)
+            if (prices.TryGetValue(item.BaseId, out var price)) total += (double)price.Median * item.Count;
+        return total;
+    }
+
     public static Vector2 Anchor(Corner corner, Vector2 cellMin, Vector2 cellMax, Vector2 tagSize) => new(
         corner is Corner.TopLeft or Corner.BottomLeft ? cellMin.X + Inset : cellMax.X - tagSize.X - Inset,
         corner is Corner.TopLeft or Corner.TopRight ? cellMin.Y + Inset : cellMax.Y - tagSize.Y - Inset);

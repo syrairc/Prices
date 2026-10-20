@@ -34,6 +34,12 @@ public sealed class Settings : PluginSettings
     [JsonIgnore] public string ContributeStatus = "";
     [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
+    public bool ShowTotals = true;
+    public bool Lock = true;
+    public Hotkey MoveKey = new(Key.Alt);
+    public int PanelX = 40;
+    public int PanelY = 200;
+
     public bool GroundEnabled = true;
     public bool GroundGrey;
     public bool GroundCyan;
@@ -105,7 +111,14 @@ public sealed class Settings : PluginSettings
     string _seasonText = "";
     bool _seasonEditing;
 
-    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround), ("Database", DrawDatabase));
+    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround), ("Totals", DrawTotals), ("Database", DrawDatabase));
+
+    internal void DrawTotals()
+    {
+        Setting.Checkbox("Show totals", ref ShowTotals, "A small panel with the FE value of your whole inventory (all four bags) while the bag or stash is open, plus the open stash tab and every stash tab you opened since Ember started - the game only loads a tab once you open it. Gear counts at its median price, unpriced items count 0");
+        Setting.Checkbox("Lock", ref Lock, "A locked panel ignores the mouse - hold the move key to drag it anyway");
+        Setting.Hotkey("Move key", ref MoveKey, "Hold to move the panel while locked");
+    }
 
     internal void DrawGround()
     {

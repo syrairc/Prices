@@ -19,7 +19,12 @@ public sealed class MainTests
 
     static InventoryItem Item(int slot, int baseId) => new(InventoryBag.Commodities, slot, "id", baseId, 0, 0, 0, 5, 100, 0);
 
-    static Main Plugin() => new() { Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
+    static Main Plugin(bool totals = false)
+    {
+        var plugin = new Main { Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
+        plugin.Settings.ShowTotals = totals;
+        return plugin;
+    }
 
     static int Vertices(Main plugin, GameState state)
     {
@@ -64,6 +69,29 @@ public sealed class MainTests
         Vertices(Plugin(), State(3, Item(0, 1)));
         Check.That((long)asked.GetValue(null)! != 0, "asked while open");
         asked.SetValue(null, 0L);
+    }
+
+    [Test]
+    public void TotalsPanelOnlyWhileBagOrStashIsOpen()
+    {
+        var plugin = Plugin(totals: true);
+        plugin.Settings.Enabled = false;
+        Check.That(Vertices(plugin, State(3, Item(0, 1))) > 0, "bag open draws the panel");
+        Check.That(Vertices(plugin, StashState(3, Item(0, 1))) > 0, "stash open draws the panel");
+        Check.Equal(0, Vertices(plugin, State(3, Item(0, 1)) with { Ui = GameUi.Empty }));
+        plugin.Settings.ShowTotals = false;
+        Check.Equal(0, Vertices(plugin, State(3, Item(0, 1))));
+    }
+
+    [Test]
+    public void RemembersEveryStashTabOpened()
+    {
+        var plugin = Plugin(totals: true);
+        Vertices(plugin, StashState(3, Item(0, 1)));
+        var other = StashState(3, Item(0, 1));
+        Vertices(plugin, other with { Stash = other.Stash! with { Tab = 1 } });
+        Vertices(plugin, StashState(3, Item(1, 1)));
+        Check.Equal(2, plugin.StashTabsSeen);
     }
 
     static readonly GameUi StashPage = new([new GamePanel("Stash", PanelKind.Stash, default, new Vector2(900, 600), false)]);
