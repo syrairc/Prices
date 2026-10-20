@@ -114,7 +114,8 @@ public sealed partial class Settings : PluginSettings
     static void DrawBase(int baseId)
     {
         var name = ItemNames.Of(baseId);
-        if (LegendaryIds.Contains(baseId)) ImGui.TextColored(EColor.ToVector4(GameColors.LegendaryName), name);
+        var rarity = LegendaryIds.Contains(baseId) ? 100 : ItemNames.Rarity(baseId);
+        if (rarity > 1) ImGui.TextColored(EColor.ToVector4(GameColors.Rarity(rarity)), name);
         else ImGui.TextUnformatted(name);
     }
 

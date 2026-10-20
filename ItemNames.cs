@@ -18,5 +18,7 @@ public static class ItemNames
         return Known[baseId] = name ?? "";
     }
 
+    public static int Rarity(int id) => Items.IsUnique(id) ? 100 : Items.TryGet(id, out var info) ? info.Rarity : 0;
+
     internal static void Forget() => Known.Clear();
 }

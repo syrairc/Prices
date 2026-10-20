@@ -69,6 +69,19 @@ public sealed class LocalListingsTests
     }
 
     [Test]
+    public void NativeRarityFillsOnlyMissingCommodityRarity()
+    {
+        TestGame.UseItems(id => id == 5080 ? new ItemInfo(5080, 3, 0, 0, 0, 0, 0, 0, false) : null, null);
+        var book = new LocalBook();
+        var texts = book.AffixTexts;
+        Check.Equal(3, ListingRow.From(new LocalRow { GoodId = 1, BaseId = 5080, Commodity = true }, texts).Rare);
+        Check.Equal("Purple", ListingRow.From(new LocalRow { GoodId = 1, BaseId = 5080, Commodity = true }, texts).RareLabel);
+        Check.Equal(2, ListingRow.From(new LocalRow { GoodId = 2, BaseId = 5080, Commodity = true, Rare = 2 }, texts).Rare);
+        Check.Equal(0, ListingRow.From(new LocalRow { GoodId = 3, BaseId = 5080 }, texts).Rare);
+        TestGame.UseItems(null, null);
+    }
+
+    [Test]
     public void CommodityAndSoldFilters()
     {
         var listings = new LocalListings();

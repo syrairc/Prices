@@ -37,6 +37,7 @@ internal sealed class ListingRow
         var id = row.SpecialId != 0 ? row.SpecialId : row.BaseId;
         var name = ItemNames.Of(id);
         if (name.Length == 0) name = "#" + id;
+        var rare = row.Rare == 0 && row.Commodity ? ItemNames.Rarity(id) : row.Rare;
         var flags = FlagsOf(row);
         var affixes = string.Join(' ', (row.Affixes ?? []).Select(affix => AffixText(texts, affix.Id).Replace("#", "")));
         return new ListingRow
@@ -45,8 +46,8 @@ internal sealed class ListingRow
             Name = name,
             Price = row.Price,
             Quantity = row.Quantity,
-            Rare = row.Rare,
-            RareLabel = RareName(row.Rare),
+            Rare = rare,
+            RareLabel = RareName(rare),
             ItemLevel = row.ItemLevel,
             TierKey = row.TierKey,
             TierText = TierMix(row.TierKey),
