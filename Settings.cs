@@ -22,6 +22,11 @@ public sealed partial class Settings : PluginSettings
     public bool ShowPurple = true;
     public bool ShowPink = true;
     public bool ShowOrange = true;
+    public bool ShowSkills = true;
+    public bool ShowCommodities = true;
+    public bool ShowOther = true;
+    public float MinValue;
+    public bool MinValueGearOnly;
     public int RefreshMinutes = 5;
     public int Season;
     public bool Contribute;
@@ -66,7 +71,15 @@ public sealed partial class Settings : PluginSettings
 
     static bool Pick(int rareValue, bool grey, bool cyan, bool purple, bool pink, bool orange) => rareValue switch { 1 => grey, 2 => cyan, 3 => purple, 4 => pink, 100 => orange, _ => true };
 
-    public bool Shows(int rareValue) => Pick(rareValue, ShowGrey, ShowCyan, ShowPurple, ShowPink, ShowOrange);
+    public bool Shows(InventoryItem item) => item.Bag switch
+    {
+        InventoryBag.Equipment => Pick(item.RareValue, ShowGrey, ShowCyan, ShowPurple, ShowPink, ShowOrange),
+        InventoryBag.Skills => ShowSkills,
+        InventoryBag.Commodities => ShowCommodities,
+        _ => ShowOther,
+    };
+
+    public bool TooCheap(InventoryItem item, double value) => value < MinValue && (!MinValueGearOnly || item.Bag == InventoryBag.Equipment);
 
     public bool ShowsOnGround(GroundItem item) =>
         (item.Equipment || GroundNonEquipment) && Pick(item.RareValue, GroundGrey, GroundCyan, GroundPurple, GroundPink, GroundOrange);
@@ -179,7 +192,7 @@ public sealed partial class Settings : PluginSettings
 
     internal void DrawTotals()
     {
-        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Only the frame colours ticked on the Prices tab count. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
+        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Only what shows a tag counts - the gear colours, bags and Hide below on the Prices tab. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
         Setting.Checkbox("Lock", ref Lock, "The stash total ignores the mouse while locked - hold the move key to drag it anyway");
         Setting.Hotkey("Move key", ref MoveKey, "Hold to move the stash total while locked");
     }
@@ -203,11 +216,16 @@ public sealed partial class Settings : PluginSettings
         Setting.Slider("Offset Y", ref OffsetY, -100, 100, "Pixels from the corner, positive moves the tag down");
         Setting.Style("Text", Text, "Colour, size, background and shadow of the tag");
         Setting.Checkbox("Show FE icon", ref ShowIcon, "The FE icon in front of the number - needs the game icons from Setup");
-        Setting.Checkbox("Grey items", ref ShowGrey, "Price tags on grey frame items (normal)");
-        Setting.Checkbox("Cyan items", ref ShowCyan, "Price tags on cyan frame items (magic)");
-        Setting.Checkbox("Purple items", ref ShowPurple, "Price tags on purple frame items (rare)");
-        Setting.Checkbox("Pink items", ref ShowPink, "Price tags on pink frame items");
-        Setting.Checkbox("Orange items", ref ShowOrange, "Price tags on orange frame items (legendary)");
+        Setting.Checkbox("Grey gear", ref ShowGrey, "Price tags on grey frame gear (normal)");
+        Setting.Checkbox("Cyan gear", ref ShowCyan, "Price tags on cyan frame gear (magic)");
+        Setting.Checkbox("Purple gear", ref ShowPurple, "Price tags on purple frame gear (rare)");
+        Setting.Checkbox("Pink gear", ref ShowPink, "Price tags on pink frame gear");
+        Setting.Checkbox("Orange gear", ref ShowOrange, "Price tags on orange frame gear (legendary)");
+        Setting.Checkbox("Skills", ref ShowSkills, "Price tags on everything in the Skills bag, any frame colour");
+        Setting.Checkbox("Commodities", ref ShowCommodities, "Price tags on everything in the Commodities bag, any frame colour - in the stash every non-gear item counts as a commodity");
+        Setting.Checkbox("Other", ref ShowOther, "Price tags on everything in the Other bag, any frame colour");
+        Setting.Slider("Hide below (FE)", ref MinValue, 0, 1000, "No price tag on anything worth less than this - a stack counts as a whole, gear at its median price. Hidden items stay out of the totals too. 0 = show everything", fmt: "%.1f", log: true);
+        Setting.Checkbox("Only hide gear", ref MinValueGearOnly, "Hide below only applies to gear, commodities, skills and other items always show. Off = applies to everything");
         Setting.Slider("Refresh every (minutes)", ref RefreshMinutes, MinRefreshMinutes, 60, "How often new prices are downloaded");
         ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted("Season");

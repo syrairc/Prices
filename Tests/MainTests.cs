@@ -98,11 +98,27 @@ public sealed class MainTests
     public void TotalCountsOnlyTheShownRarities()
     {
         var plugin = Plugin();
-        InventoryItem[] items = [Item(0, 1) with { RareValue = 3 }, Item(1, 1) with { RareValue = 100 }];
+        InventoryItem[] items = [Item(0, 1) with { Bag = InventoryBag.Equipment, RareValue = 3 }, Item(1, 1) with { Bag = InventoryBag.Equipment, RareValue = 100 }];
         plugin.Settings.ShowPurple = true;
         Check.Equal(80.0, plugin.TotalOf(items));
         plugin.Settings.ShowPurple = false;
         Check.Equal(40.0, plugin.TotalOf(items));
+    }
+
+    [Test]
+    public void MinValueHidesCheapTagsAndLeavesThemOutOfTheTotal()
+    {
+        var plugin = Plugin();
+        plugin.Prices = new Dictionary<int, Price> { [1] = new(8, null, null), [2] = new(1, null, null) };
+        InventoryItem[] items = [Item(0, 1), Item(1, 2), Item(2, 2) with { Bag = InventoryBag.Equipment, Count = 1 }];
+        Check.Equal(40.0 + 5 + 1, plugin.TotalOf(items));
+        plugin.Settings.MinValue = 10;
+        Check.Equal(40.0, plugin.TotalOf(items));
+        plugin.Settings.MinValueGearOnly = true;
+        Check.Equal(40.0 + 5, plugin.TotalOf(items));
+        plugin.Settings.MinValueGearOnly = false;
+        var one = Vertices(plugin, State(3, Item(0, 1)));
+        Check.Equal(one, Vertices(plugin, State(3, Item(0, 1), Item(1, 2))));
     }
 
     [Test]

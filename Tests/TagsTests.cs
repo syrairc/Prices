@@ -10,6 +10,14 @@ public sealed class TagsTests
     static InventoryItem Item(InventoryBag bag, int baseId, int count) => new(bag, 0, "id", baseId, 0, 0, 0, count, 0, 0);
 
     [Test]
+    public void ValueIsTheStackMedianOrZero()
+    {
+        var prices = new Dictionary<int, Price> { [1] = new(2.5f, null, null) };
+        Check.Equal(10.0, Tags.Value(Item(InventoryBag.Commodities, 1, 4), prices));
+        Check.Equal(0.0, Tags.Value(Item(InventoryBag.Commodities, 99, 4), prices));
+    }
+
+    [Test]
     public void TotalSumsMedianTimesCountSkippingUnpriced()
     {
         var prices = new Dictionary<int, Price> { [1] = new(2.5f, null, null), [2] = new(100, 50, 300) };

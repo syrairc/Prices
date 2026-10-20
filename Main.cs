@@ -422,7 +422,13 @@ public sealed class Main : Plugin<Settings>
         }
     }
 
-    internal double TotalOf(IEnumerable<InventoryItem> items) => Tags.Total(items.Where(item => Settings.Shows(item.RareValue)), _prices, Legendary);
+    internal double TotalOf(IEnumerable<InventoryItem> items)
+    {
+        var total = 0.0;
+        foreach (var item in items)
+            if (Settings.Shows(item) && Tags.Value(item, _prices, Legendary) is var value && !Settings.TooCheap(item, value)) total += value;
+        return total;
+    }
 
     Vector2 Movable(Vector2 size)
     {
@@ -468,7 +474,7 @@ public sealed class Main : Plugin<Settings>
         using var clip = Draw.Clip(clipMin, clipMax);
         foreach (var item in items)
         {
-            if (!onTab(item) || !Settings.Shows(item.RareValue) || TagFor(item.BaseId, item.Count, item.Bag == InventoryBag.Equipment, item.SpecialId, item.Unidentified, item.PrefixIds, item.SuffixIds) is not { } text) continue;
+            if (!onTab(item) || !Settings.Shows(item) || Settings.TooCheap(item, Tags.Value(item, _prices, Legendary)) || TagFor(item.BaseId, item.Count, item.Bag == InventoryBag.Equipment, item.SpecialId, item.Unidentified, item.PrefixIds, item.SuffixIds) is not { } text) continue;
             foreach (var cell in cells)
             {
                 if (cell.Slot != item.Slot) continue;

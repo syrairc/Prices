@@ -40,14 +40,16 @@ public static class Tags
 
     public static Price? Find(IReadOnlyDictionary<int, Price> prices, int id) => prices.TryGetValue(id, out var price) ? price : null;
 
+    public static double Value(InventoryItem item, IReadOnlyDictionary<int, Price> prices, LegendaryPrices? legendary = null)
+    {
+        if (item.SpecialId != 0 && (legendary?.Of(item.SpecialId, item.Unidentified, [.. item.PrefixIds, .. item.SuffixIds]) ?? Find(prices, item.SpecialId)) is { } special) return special.Median;
+        return prices.TryGetValue(item.BaseId, out var price) ? (double)price.Median * item.Count : 0;
+    }
+
     public static double Total(IEnumerable<InventoryItem> items, IReadOnlyDictionary<int, Price> prices, LegendaryPrices? legendary = null)
     {
         var total = 0.0;
-        foreach (var item in items)
-        {
-            if (item.SpecialId != 0 && (legendary?.Of(item.SpecialId, item.Unidentified, [.. item.PrefixIds, .. item.SuffixIds]) ?? Find(prices, item.SpecialId)) is { } special) total += special.Median;
-            else if (prices.TryGetValue(item.BaseId, out var price)) total += (double)price.Median * item.Count;
-        }
+        foreach (var item in items) total += Value(item, prices, legendary);
         return total;
     }
 
