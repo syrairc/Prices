@@ -71,16 +71,27 @@ public sealed class MainTests
         asked.SetValue(null, 0L);
     }
 
+    static readonly GameUi OpenWithSort = new([new GamePanel("Bag", PanelKind.Inventory, default, new Vector2(900, 600), false) { Parts = [new NamedRect("UIButton_Arrage", new Vector2(700, 20), new Vector2(780, 60))] }]);
+
     [Test]
-    public void TotalsPanelOnlyWhileBagOrStashIsOpen()
+    public void InventoryTotalSitsLeftOfTheSortButton()
     {
         var plugin = Plugin(totals: true);
         plugin.Settings.Enabled = false;
-        Check.That(Vertices(plugin, State(3, Item(0, 1))) > 0, "bag open draws the panel");
-        Check.That(Vertices(plugin, StashState(3, Item(0, 1))) > 0, "stash open draws the panel");
+        Check.Equal(0, Vertices(plugin, State(3, Item(0, 1))));
+        Check.That(Vertices(plugin, State(3, Item(0, 1)) with { Ui = OpenWithSort }) > 0, "sort button found draws the total");
         Check.Equal(0, Vertices(plugin, State(3, Item(0, 1)) with { Ui = GameUi.Empty }));
         plugin.Settings.ShowTotals = false;
-        Check.Equal(0, Vertices(plugin, State(3, Item(0, 1))));
+        Check.Equal(0, Vertices(plugin, State(3, Item(0, 1)) with { Ui = OpenWithSort }));
+    }
+
+    [Test]
+    public void StashTotalDrawsWhileTheStashIsOpen()
+    {
+        var plugin = Plugin(totals: true);
+        plugin.Settings.Enabled = false;
+        Check.That(Vertices(plugin, StashState(3, Item(0, 1))) > 0, "stash open draws the total");
+        Check.Equal(0, Vertices(plugin, StashState(3, Item(0, 1)) with { Ui = GameUi.Empty }));
     }
 
     [Test]
