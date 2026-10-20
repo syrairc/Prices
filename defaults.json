@@ -46,6 +46,9 @@
   "IgnoreOlderThanDays": 0,
   "PurgeAfterDays": 0,
   "ExcludeOutliers": true,
+  "ShareTitrack": false,
+  "ShareEtor": false,
+  "ShareLocal": true,
   "Priority": [
     "Etor",
     "Titrack",

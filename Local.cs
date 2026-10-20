@@ -55,7 +55,13 @@ public sealed class LocalRow
     [JsonPropertyName("f")] public long FirstSeen { get; set; }
     [JsonPropertyName("s")] public long LastSeen { get; set; }
     [JsonPropertyName("x")] public bool Sold { get; set; }
-    [JsonPropertyName("a")] public RowAffix[]? Affixes { get; set; }
+    [JsonPropertyName("a")]
+    public RowAffix[]? Affixes
+    {
+        get => _affixes;
+        set => (_affixes, _tierKey) = (value, null);
+    }
+
     [JsonPropertyName("fl")] public string[]? Flags { get; set; }
     [JsonPropertyName("sk")] public int SkillId { get; set; }
     [JsonPropertyName("st")] public int SkillType { get; set; }
@@ -69,6 +75,7 @@ public sealed class LocalRow
     // how many affixes sit at each tier, e.g. "A:2x5,3x1;B:2x1" (A = prefixes and suffixes, B = base attributes), empty when nothing has a tier (legendaries)
     [JsonIgnore] public string TierKey => _tierKey ??= TierKeyOf(Affixes);
 
+    RowAffix[]? _affixes;
     string? _tierKey;
 
     static string TierKeyOf(RowAffix[]? affixes)
@@ -102,7 +109,7 @@ public sealed class LocalBook
         [JsonPropertyName("u")] public Update? Update { get; set; }
     }
 
-    static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
+    internal static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
     static readonly Regex Markup = new("<[^>]*>");
     static readonly Regex Roll = new(@"<p>(\+?)(-?[\d.]+)(\([^)]*\))?</p>");
 
@@ -175,6 +182,67 @@ public sealed class LocalBook
         }
         return changed;
     }
+
+    // copies are taken as they are, a known listing keeps what we have and learns what only the file knows - a changed row needs the full rewrite, the update lines carry only seen / sold / price
+    public (int Added, int Updated, int Skipped) Merge(IEnumerable<LocalRow> incoming, IReadOnlyDictionary<int, string> affixTexts)
+    {
+        int added = 0, updated = 0, skipped = 0;
+        foreach (var row in incoming)
+        {
+            if (row.GoodId <= 0 || row.Quantity <= 0 || row.Price < 0)
+            {
+                skipped++;
+                continue;
+            }
+            if (_rows.TryGetValue(row.GoodId, out var ours))
+            {
+                if (Absorb(ours, row)) updated++;
+                continue;
+            }
+            row.WrittenSeen = row.LastSeen;
+            _rows[row.GoodId] = row;
+            _newRows.Add(row.GoodId);
+            added++;
+        }
+        foreach (var (id, text) in affixTexts)
+            if (_affixes.TryAdd(id, text)) _newAffixes.Add(id);
+        if (added + updated == 0) return (0, 0, skipped);
+        if (updated > 0) _compact = true;
+        (_baseCount, _tiers) = (null, null);
+        Version++;
+        return (added, updated, skipped);
+    }
+
+    static (long, long, bool, long, int, int, int, int, int, int, int, int, bool, int, int, int, int, bool, bool, bool, RowAffix[]?, string[]?) Shape(LocalRow row) =>
+        (row.FirstSeen, row.LastSeen, row.Sold, row.Price, row.Quantity, row.BaseId, row.SpecialId, row.Rare, row.Level, row.ItemLevel, row.Quality, row.Type, row.Commodity, row.SkillId, row.SkillType, row.HoleNum, row.EnhanceCount, row.Forged, row.Corrode, row.Unidentified, row.Affixes, row.Flags);
+
+    static bool Absorb(LocalRow ours, LocalRow theirs)
+    {
+        var before = Shape(ours);
+        if (theirs.LastSeen > ours.LastSeen) (ours.Price, ours.Quantity, ours.LastSeen) = (theirs.Price, theirs.Quantity, theirs.LastSeen);
+        if (theirs.FirstSeen > 0) ours.FirstSeen = ours.FirstSeen > 0 ? Math.Min(ours.FirstSeen, theirs.FirstSeen) : theirs.FirstSeen;
+        ours.Sold |= theirs.Sold;
+        ours.BaseId = Fill(ours.BaseId, theirs.BaseId);
+        ours.SpecialId = Fill(ours.SpecialId, theirs.SpecialId);
+        ours.Rare = Fill(ours.Rare, theirs.Rare);
+        ours.Level = Fill(ours.Level, theirs.Level);
+        ours.ItemLevel = Fill(ours.ItemLevel, theirs.ItemLevel);
+        ours.Quality = Fill(ours.Quality, theirs.Quality);
+        ours.Type = Fill(ours.Type, theirs.Type);
+        ours.SkillId = Fill(ours.SkillId, theirs.SkillId);
+        ours.SkillType = Fill(ours.SkillType, theirs.SkillType);
+        ours.HoleNum = Fill(ours.HoleNum, theirs.HoleNum);
+        ours.EnhanceCount = Fill(ours.EnhanceCount, theirs.EnhanceCount);
+        ours.Commodity |= theirs.Commodity;
+        ours.Forged |= theirs.Forged;
+        ours.Corrode |= theirs.Corrode;
+        ours.Unidentified |= theirs.Unidentified;
+        if (ours.Affixes is not { Length: > 0 } && theirs.Affixes is { Length: > 0 }) ours.Affixes = theirs.Affixes;
+        if (ours.Flags is not { Length: > 0 } && theirs.Flags is { Length: > 0 }) ours.Flags = theirs.Flags;
+        return !before.Equals(Shape(ours));
+    }
+
+    static int Fill(int mine, int theirs) => mine == 0 ? theirs : mine;
 
     void MarkUpdated(LocalRow row)
     {

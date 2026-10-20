@@ -81,6 +81,7 @@ public sealed class Main : Plugin<Settings>
     public override void OnEnable()
     {
         Settings.PurgeLocal = PurgeNow;
+        (Settings.ShareFolder, Settings.ExportShare, Settings.ImportShare) = (ShareDirectory, ExportShare, ImportShare);
         _fullKey = null;
         if (PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);
     }
@@ -300,6 +301,77 @@ public sealed class Main : Plugin<Settings>
         if (removed > 0) _localChanged = true;
         return removed;
     }
+
+    internal string ShareDirectory => Path.Combine(DataDirectory, "Share");
+
+    IReadOnlyDictionary<int, Price>? Stored(PriceSource source, int season)
+    {
+        if (_synced is { Tables: { } tables } && _synced.Season == season && tables.TryGetValue(source, out var table)) return table;
+        var cache = source == PriceSource.Titrack ? Path.Combine(DataDirectory, $"prices-{season}.json") : EtorSync.CachePath(DataDirectory, season);
+        return PriceSources.WithImported(DataDirectory, source, season, PriceSync.Load(cache)?.Rows);
+    }
+
+    internal string ExportShare(PriceSource[] which)
+    {
+        if (which.Length == 0) return "Pick a database to export";
+        if (FileSeason() is not { } season) return "Season not known yet";
+        try
+        {
+            LocalBook? book = null;
+            if (which.Contains(PriceSource.Local))
+            {
+                book = _book is not null && _bookSeason == season ? _book : new LocalBook();
+                if (!ReferenceEquals(book, _book)) book.Load(DataDirectory, season);
+            }
+            var content = new ShareContent(season, book?.Rows.ToList(), book?.AffixTexts,
+                which.Contains(PriceSource.Titrack) ? Stored(PriceSource.Titrack, season) ?? new Dictionary<int, Price>() : null,
+                which.Contains(PriceSource.Etor) ? Stored(PriceSource.Etor, season) ?? new Dictionary<int, Price>() : null);
+            var now = DateTimeOffset.FromUnixTimeSeconds(UnixClock());
+            var path = Path.Combine(ShareDirectory, Share.FileName(season, now));
+            Share.Write(path, content, now);
+            return $"Exported {string.Join(", ", which.Select(source => source.ToString()))} (season {season}) to {path}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "Export failed: " + ex.Message;
+        }
+    }
+
+    internal string ImportShare(string path)
+    {
+        var (content, error) = Share.Read(path.Trim().Trim('"'));
+        if (content is null) return error!;
+        try
+        {
+            var parts = new List<string>();
+            if (content.LocalRows is not null)
+            {
+                var live = Settings.UseLocal && _book is not null && _bookSeason == content.Season;
+                var book = live ? _book! : new LocalBook();
+                if (!live) book.Load(DataDirectory, content.Season);
+                var (added, updated, skipped) = book.Merge(content.LocalRows, content.Affixes ?? new Dictionary<int, string>());
+                if (live) _localChanged = true;
+                else
+                {
+                    book.Flush(DataDirectory, content.Season);
+                    if (book.Dirty) return "Could not write the local database file";
+                }
+                parts.Add($"{Count(added)} new and {Count(updated)} updated listings" + (skipped > 0 ? $" ({Count(skipped)} skipped)" : ""));
+            }
+            var (titrack, etor) = Share.ImportTables(DataDirectory, content);
+            if (content.Titrack is not null) parts.Add($"{Count(titrack)} TITrack prices");
+            if (content.Etor is not null) parts.Add($"{Count(etor)} ETor prices");
+            if (titrack + etor > 0 && PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);
+            var other = FileSeason() is { } current && current != content.Season ? $", not the current season {current} - merged into its own files" : "";
+            return parts.Count == 0 ? $"The file has no databases (season {content.Season})" : $"Imported {string.Join(", ", parts)} (season {content.Season}{other})";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "Import failed: " + ex.Message;
+        }
+    }
+
+    static string Count(int number) => number.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
     void UpdateStatus()
     {

@@ -128,6 +128,30 @@ public static class PriceSources
         return merged;
     }
 
+    internal static string ImportedPath(string directory, PriceSource source, int season) => Path.Combine(directory, $"imported-{(source == PriceSource.Titrack ? "titrack" : "etor")}-{season}.json");
+
+    // the newer Updated wins per base id, a missing Updated loses to any date, equal keeps ours
+    public static (Dictionary<int, Price> Rows, int Changed) Newest(IReadOnlyDictionary<int, Price> ours, IReadOnlyDictionary<int, Price> theirs)
+    {
+        var merged = new Dictionary<int, Price>(ours);
+        var changed = 0;
+        foreach (var (id, price) in theirs)
+        {
+            if (merged.TryGetValue(id, out var mine) && !(price.Updated is { } at && (mine.Updated is not { } was || at > was))) continue;
+            merged[id] = price;
+            changed++;
+        }
+        return (merged, changed);
+    }
+
+    // a downloaded table with the user's imported prices on top, the import alone when nothing was downloaded
+    internal static IReadOnlyDictionary<int, Price>? WithImported(string directory, PriceSource source, int season, IReadOnlyDictionary<int, Price>? downloaded)
+    {
+        var imported = PriceSync.Load(ImportedPath(directory, source, season))?.Rows;
+        if (imported is null || imported.Count == 0) return downloaded;
+        return Newest(downloaded ?? new Dictionary<int, Price>(), imported).Rows;
+    }
+
     public static Synced Sync(HttpClient http, string directory, PriceSource[] active, int setting, int? log, bool full)
     {
         var tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
@@ -139,23 +163,23 @@ public static class PriceSources
         {
             titrack = PriceSync.Sync(http, directory, setting, log, full);
             (season, source, error) = (titrack.Season, titrack.Source, titrack.Error);
-            if (titrack.File is { } file) tables[PriceSource.Titrack] = file.Rows;
         }
         else (season, source, error) = PriceSync.ResolveSeason(http, directory, setting, log);
         if (season is not { } id) return new Synced(titrack?.File, null, source, error);
+        if (titrack is not null && WithImported(directory, PriceSource.Titrack, id, titrack.File?.Rows) is { } titrackRows) tables[PriceSource.Titrack] = titrackRows;
         if (active.Contains(PriceSource.Etor))
         {
             var path = EtorSync.CachePath(directory, id);
             try
             {
                 var rows = EtorSync.Fetch(http, id).GetAwaiter().GetResult();
-                tables[PriceSource.Etor] = rows;
+                tables[PriceSource.Etor] = WithImported(directory, PriceSource.Etor, id, rows)!;
                 TrySave(path, new PriceFile(id, null, rows));
             }
             catch (Exception ex) when (ex is HttpRequestException or FormatException or TaskCanceledException)
             {
                 error = error is null ? "ETor: " + ex.Message : error + "; ETor: " + ex.Message;
-                if (PriceSync.Load(path) is { } cached) tables[PriceSource.Etor] = cached.Rows;
+                if (WithImported(directory, PriceSource.Etor, id, PriceSync.Load(path)?.Rows) is { } etorRows) tables[PriceSource.Etor] = etorRows;
             }
         }
         // Local is not downloaded, Main fills it from the trade house
@@ -174,11 +198,11 @@ public static class PriceSources
         foreach (var source in active)
         {
             var path = source switch { PriceSource.Titrack => Path.Combine(directory, $"prices-{season}.json"), PriceSource.Etor => EtorSync.CachePath(directory, season), _ => null };
-            if (path is null || PriceSync.Load(path) is not { } file) continue;
-            tables[source] = file.Rows;
+            if (path is null || WithImported(directory, source, season, PriceSync.Load(path)?.Rows) is not { } rows) continue;
+            tables[source] = rows;
             names.Add(Name(source));
-            var written = File.GetLastWriteTime(path);
-            if (written > at) at = written;
+            foreach (var file in new[] { path, ImportedPath(directory, source, season) })
+                if (File.Exists(file) && File.GetLastWriteTime(file) is var written && written > at) at = written;
         }
         if (tables.Count == 0) return null;
         return (new Synced(new PriceFile(season, null, Combine(tables.Values)), season, "cached", null, string.Join(", ", names), tables), at);

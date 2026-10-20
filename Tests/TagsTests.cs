@@ -80,12 +80,23 @@ public sealed class TagsTests
         Check.Equal(new Vector2(61, 120), Tags.Anchor(Corner.BottomRight, min, max, tag));
     }
 
+    static InventoryItem Rare(InventoryBag bag, int rareValue) => Item(bag, 1, 1) with { RareValue = rareValue };
+
     [Test]
-    public void RarityTogglesHideOnlyTheirFrame()
+    public void RarityTogglesHideOnlyTheirFrameOnGear()
     {
         var settings = new Settings { ShowGrey = false, ShowOrange = false };
-        Check.That(!settings.Shows(1) && !settings.Shows(100), "grey and orange hidden");
-        Check.That(settings.Shows(2) && settings.Shows(3) && settings.Shows(4), "others shown");
-        Check.That(settings.Shows(0) && settings.Shows(7), "unknown values always shown");
+        Check.That(!settings.Shows(Rare(InventoryBag.Equipment, 1)) && !settings.Shows(Rare(InventoryBag.Equipment, 100)), "grey and orange gear hidden");
+        Check.That(settings.Shows(Rare(InventoryBag.Equipment, 2)) && settings.Shows(Rare(InventoryBag.Equipment, 3)) && settings.Shows(Rare(InventoryBag.Equipment, 4)), "other gear shown");
+        Check.That(settings.Shows(Rare(InventoryBag.Equipment, 0)) && settings.Shows(Rare(InventoryBag.Equipment, 7)), "unknown values always shown");
+        Check.That(settings.Shows(Rare(InventoryBag.Commodities, 1)) && settings.Shows(Rare(InventoryBag.Skills, 100)) && settings.Shows(Rare(InventoryBag.Other, 1)), "rarity never hides non-gear");
+    }
+
+    [Test]
+    public void BagTogglesHideTheirNonGear()
+    {
+        var settings = new Settings { ShowCommodities = false, ShowSkills = false, ShowOther = false };
+        Check.That(!settings.Shows(Rare(InventoryBag.Commodities, 3)) && !settings.Shows(Rare(InventoryBag.Skills, 3)) && !settings.Shows(Rare(InventoryBag.Other, 3)), "bags hidden");
+        Check.That(settings.Shows(Rare(InventoryBag.Equipment, 3)), "gear follows the rarity toggles only");
     }
 }

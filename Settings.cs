@@ -9,7 +9,7 @@ using Hexa.NET.ImGui;
 
 namespace Prices;
 
-public sealed class Settings : PluginSettings
+public sealed partial class Settings : PluginSettings
 {
     public bool Enabled = true;
     public Corner Corner = Corner.TopLeft;
@@ -32,11 +32,17 @@ public sealed class Settings : PluginSettings
     public int IgnoreOlderThanDays;
     public int PurgeAfterDays;
     public bool ExcludeOutliers = true;
+    public bool ShareTitrack;
+    public bool ShareEtor;
+    public bool ShareLocal = true;
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
     [JsonIgnore] public Func<int>? PurgeLocal;
     [JsonIgnore] public string PurgeResult = "";
+    [JsonIgnore] public Func<PriceSource[], string>? ExportShare;
+    [JsonIgnore] public Func<string, string>? ImportShare;
+    [JsonIgnore] public string ShareFolder = "";
     [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
     [JsonIgnore] public LegendaryPrices? Legendaries;
@@ -169,7 +175,7 @@ public sealed class Settings : PluginSettings
     string _seasonText = "";
     bool _seasonEditing;
 
-    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround), ("Totals", DrawTotals), ("Database", DrawDatabase));
+    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Ground Items", DrawGround), ("Totals", DrawTotals), ("Database", DrawDatabase), ("Share", DrawShare));
 
     internal void DrawTotals()
     {
