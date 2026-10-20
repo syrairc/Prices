@@ -34,6 +34,8 @@ public sealed class Settings : PluginSettings
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
+    [JsonIgnore] public Func<int>? PurgeLocal;
+    [JsonIgnore] public string PurgeResult = "";
     [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
     public bool ShowTotals = true;
@@ -190,5 +192,13 @@ public sealed class Settings : PluginSettings
             EmberHUD.Ui.Text.Tip(Tip(source));
         }, new ListOpts { ShowIndex = true })) Priority = [.. order];
         Setting.Slider("Minimum samples", ref MinSamples, 0, 200, "Ignore a price that fewer than this many Exchange searches back, the next database in the list prices the item instead. 0 = keep everything. Only TITrack reports sample counts, ETor prices always stay");
+        Setting.Slider("Ignore older than (days)", ref IgnoreOlderThanDays, 0, 90, "Ignore a price whose last update is older than this many days, the next database in the list prices the item instead. 0 = keep everything. Applies to every database");
+        Setting.Slider("Purge local data after (days)", ref PurgeAfterDays, 0, 365, "Delete saved local trade house listings that were last seen more than this many days ago, on start and then every hour. 0 = never. Only your local database is purged, TITrack and ETor are downloaded copies");
+        if (ImGui.Button("Purge now##local")) PurgeResult = PurgeAfterDays <= 0 ? "Set a number of days first" : PurgeLocal is { } purge ? $"Removed {purge()} saved listings" : "";
+        if (PurgeResult.Length > 0)
+        {
+            ImGui.SameLine();
+            ImGui.TextDisabled(PurgeResult);
+        }
     }
 }

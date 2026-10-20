@@ -77,6 +77,7 @@ public sealed class Main : Plugin<Settings>
 
     public override void OnEnable()
     {
+        Settings.PurgeLocal = PurgeNow;
         _fullKey = null;
         if (PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);
     }

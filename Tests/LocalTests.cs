@@ -238,6 +238,19 @@ public sealed class LocalTests
     }
 
     [Test]
+    public void TheSettingsButtonPurgesThroughTheHook()
+    {
+        var plugin = Plugin();
+        plugin.OnEnable();
+        TestGame.Set(Goods(Good(1, 10, 500, 100)));
+        plugin.Tick();
+        plugin.Settings.PurgeAfterDays = 1;
+        plugin.UnixClock = () => Now + 3 * 86400;
+        Check.Equal(1, plugin.Settings.PurgeLocal!());
+        plugin.Dispose();
+    }
+
+    [Test]
     public void IgnoreOlderThanDaysRebuildsWithoutADownload()
     {
         var plugin = Plugin();
