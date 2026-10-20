@@ -173,7 +173,7 @@ public sealed class Settings : PluginSettings
 
     internal void DrawTotals()
     {
-        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
+        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Only the frame colours ticked on the Prices tab count. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
         Setting.Checkbox("Lock", ref Lock, "The stash total ignores the mouse while locked - hold the move key to drag it anyway");
         Setting.Hotkey("Move key", ref MoveKey, "Hold to move the stash total while locked");
     }

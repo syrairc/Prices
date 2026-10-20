@@ -95,6 +95,17 @@ public sealed class MainTests
     }
 
     [Test]
+    public void TotalCountsOnlyTheShownRarities()
+    {
+        var plugin = Plugin();
+        InventoryItem[] items = [Item(0, 1) with { RareValue = 3 }, Item(1, 1) with { RareValue = 100 }];
+        plugin.Settings.ShowPurple = true;
+        Check.Equal(80.0, plugin.TotalOf(items));
+        plugin.Settings.ShowPurple = false;
+        Check.Equal(40.0, plugin.TotalOf(items));
+    }
+
+    [Test]
     public void RemembersEveryStashTabOpened()
     {
         var plugin = Plugin(totals: true);

@@ -341,14 +341,16 @@ public sealed class Main : Plugin<Settings>
         Game.WantInventory();
         var icon = TagIcon(out var hasIcon);
         if (state.Inventory is { } inventory && SortButton(state.Ui) is { } sort)
-            DrawTag(Fe(Tags.Total(inventory, _prices, Legendary)), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
+            DrawTag(Fe(TotalOf(inventory)), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
         if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
         {
             var all = 0.0;
-            foreach (var items in _stashTabs.Values) all += Tags.Total(items, _prices, Legendary);
-            DrawTag($"{Fe(Tags.Total(tab, _prices, Legendary))} / {Fe(all)}", icon, hasIcon, Movable);
+            foreach (var items in _stashTabs.Values) all += TotalOf(items);
+            DrawTag($"{Fe(TotalOf(tab))} / {Fe(all)}", icon, hasIcon, Movable);
         }
     }
+
+    internal double TotalOf(IEnumerable<InventoryItem> items) => Tags.Total(items.Where(item => Settings.Shows(item.RareValue)), _prices, Legendary);
 
     Vector2 Movable(Vector2 size)
     {
