@@ -118,12 +118,13 @@ public static class PriceSources
     static string Name(PriceSource source) => source switch { PriceSource.Titrack => "TITrack", PriceSource.Etor => "ETor", _ => "Local" };
 
     // a price with a known sample count under minSamples is skipped, so a lower database can still price the item - unknown counts (ETor) always pass
-    public static Dictionary<int, Price> Combine(IEnumerable<IReadOnlyDictionary<int, Price>> inPriorityOrder, int minSamples = 0)
+    // a known Updated older than notBefore is skipped the same way - unknown Updated always passes
+    public static Dictionary<int, Price> Combine(IEnumerable<IReadOnlyDictionary<int, Price>> inPriorityOrder, int minSamples = 0, DateTimeOffset? notBefore = null)
     {
         var merged = new Dictionary<int, Price>();
         foreach (var table in inPriorityOrder)
             foreach (var (id, price) in table)
-                if (!(price.Submissions < minSamples)) merged.TryAdd(id, price);
+                if (!(price.Submissions < minSamples) && !(price.Updated < notBefore)) merged.TryAdd(id, price);
         return merged;
     }
 
@@ -157,7 +158,7 @@ public static class PriceSources
                 if (PriceSync.Load(path) is { } cached) tables[PriceSource.Etor] = cached.Rows;
             }
         }
-        // ponytail: Local has no table yet, it joins here once the market scan fills one
+        // Local is not downloaded, Main fills it from the trade house
         var used = active.Where(tables.ContainsKey).ToArray();
         if (used.Length == 0) return new Synced(null, id, source, error);
         var merged = Combine(used.Select(s => tables[s]));

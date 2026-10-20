@@ -43,6 +43,8 @@
   "UseEtor": true,
   "UseLocal": false,
   "MinSamples": 0,
+  "IgnoreOlderThanDays": 0,
+  "PurgeAfterDays": 0,
   "Priority": [
     "Etor",
     "Titrack",

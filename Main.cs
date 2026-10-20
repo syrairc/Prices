@@ -29,7 +29,14 @@ public sealed class Main : Plugin<Settings>
     (int, int?, string)? _fullKey;
     int? _heldSeason;
     Synced? _synced;
-    int _builtMin;
+    (int Min, int Days, bool Local) _builtKey;
+    string _statusBase = "";
+    LocalBook? _book;
+    int? _bookSeason;
+    IReadOnlyDictionary<int, Price>? _local;
+    TradeGood[]? _lastGoods;
+    bool _localChanged, _rebuild;
+    long _nextLocalAt, _nextFlushAt, _nextPurgeAt;
     Contribution? _contribution;
     CancellationTokenSource? _stopContributing;
     readonly Dictionary<int, InventoryItem[]> _stashTabs = [];
@@ -50,7 +57,11 @@ public sealed class Main : Plugin<Settings>
 
     internal Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
+    internal Func<long> UnixClock { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
     internal int? LogSeason { get; set; }
+
+    internal LocalBook? Book => _book;
 
     internal int StashTabsSeen => _stashTabs.Count;
 
@@ -74,7 +85,13 @@ public sealed class Main : Plugin<Settings>
     {
         if (Settings.GroundEnabled) Game.WantGroundItems();
         Contribute();
-        if (_synced is not null && _builtMin != Settings.MinSamples) Prices = Build(_synced);
+        CollectLocal();
+        if (_rebuild || ((_synced is not null || _local is not null) && _builtKey != BuildKey))
+        {
+            _rebuild = false;
+            Prices = Build();
+            UpdateStatus();
+        }
         if (Job.TakeFinished() is { } done)
         {
             var result = done.GetAwaiter().GetResult();
@@ -98,11 +115,16 @@ public sealed class Main : Plugin<Settings>
 
     string SourceKey => string.Join(',', Settings.Active);
 
-    public override void OnDisable() => StopContributing();
+    public override void OnDisable()
+    {
+        StopContributing();
+        FlushBook();
+    }
 
     public override void Dispose()
     {
         StopContributing();
+        FlushBook();
         _http?.Dispose();
     }
 
@@ -189,11 +211,90 @@ public sealed class Main : Plugin<Settings>
         return merged;
     }
 
-    IReadOnlyDictionary<int, Price> Build(Synced result)
+    (int, int, bool) BuildKey => (Settings.MinSamples, Settings.IgnoreOlderThanDays, Settings.UseLocal);
+
+    Dictionary<PriceSource, IReadOnlyDictionary<int, Price>> AllTables()
     {
-        _builtMin = Settings.MinSamples;
-        if (_builtMin <= 0 || result.Tables is not { } tables) return result.File!.Rows;
-        return PriceSources.Combine(Settings.Active.Where(tables.ContainsKey).Select(source => tables[source]), _builtMin);
+        var tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>(_synced?.Tables ?? new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>());
+        if (Settings.UseLocal && _local is not null) tables[PriceSource.Local] = _local;
+        return tables;
+    }
+
+    IReadOnlyDictionary<int, Price> Build()
+    {
+        _builtKey = BuildKey;
+        var tables = AllTables();
+        Settings.Tables = tables;
+        if (tables.Count == 0) return _synced?.File?.Rows ?? NoPrices;
+        DateTimeOffset? notBefore = Settings.IgnoreOlderThanDays > 0 ? DateTimeOffset.FromUnixTimeSeconds(UnixClock()) - TimeSpan.FromDays(Settings.IgnoreOlderThanDays) : null;
+        return PriceSources.Combine(Settings.Active.Where(tables.ContainsKey).Select(source => tables[source]), Settings.MinSamples, notBefore);
+    }
+
+    int? FileSeason() => _heldSeason ?? LogSeason ?? (Settings.Season > 0 ? Settings.Season : null);
+
+    void CollectLocal()
+    {
+        if (!Settings.UseLocal)
+        {
+            if (_book is null) return;
+            FlushBook();
+            (_book, _bookSeason, _local, _localChanged, _rebuild) = (null, null, null, false, true);
+            return;
+        }
+        Game.WantTradeGoods();
+        var now = UnixClock();
+        OpenBook();
+        if (Game.State.TradeGoods is { } goods && !ReferenceEquals(goods, _lastGoods))
+        {
+            _lastGoods = goods;
+            if (_book!.Add(goods, now)) _localChanged = true;
+        }
+        if (_localChanged && now >= _nextLocalAt)
+        {
+            _local = _book!.Prices(now, LocalBook.Recent);
+            (_localChanged, _rebuild, _nextLocalAt) = (false, true, now + 5);
+        }
+        // ponytail: flushed on the main thread, a few hundred lines per 5 s is nothing - move to the job if a scan ever grows to tens of thousands
+        if (now >= _nextFlushAt)
+        {
+            FlushBook();
+            _nextFlushAt = now + 5;
+        }
+        if (Settings.PurgeAfterDays > 0 && now >= _nextPurgeAt)
+        {
+            PurgeNow();
+            _nextPurgeAt = now + 3600;
+        }
+    }
+
+    // ponytail: a season switch drops the old book and loads the other file, nothing is shared between seasons; a book started before any season was known is kept and joins the first file
+    void OpenBook()
+    {
+        var season = FileSeason();
+        if (_book is not null && season == _bookSeason) return;
+        FlushBook();
+        if (_book is null || _bookSeason is not null) _book = new LocalBook();
+        if (season is { } known) _book.Load(DataDirectory, known);
+        (_bookSeason, _localChanged, _nextPurgeAt) = (season, true, 0);
+    }
+
+    void FlushBook()
+    {
+        if (_book is not null && _bookSeason is { } season) _book.Flush(DataDirectory, season);
+    }
+
+    internal int PurgeNow()
+    {
+        if (_book is null || Settings.PurgeAfterDays <= 0) return 0;
+        var removed = _book.Purge(UnixClock() - Settings.PurgeAfterDays * 86400L);
+        if (removed > 0) _localChanged = true;
+        return removed;
+    }
+
+    void UpdateStatus()
+    {
+        var local = Settings.UseLocal && _book is not null ? $"Local {_book.Count} rows" : "";
+        Settings.Status = _statusBase.Length == 0 ? local : local.Length == 0 ? _statusBase : $"{_statusBase}, {local}";
     }
 
     void Apply(Synced result, DateTime? at = null)
@@ -201,9 +302,8 @@ public sealed class Main : Plugin<Settings>
         if (result.File is not null)
         {
             _synced = result;
-            Prices = Build(result);
-            Settings.Tables = result.Tables ?? Settings.Tables;
             _heldSeason = result.Season;
+            Prices = Build();
         }
         else if (result.Season is { } season && _heldSeason is { } held && held != season)
         {
@@ -212,7 +312,8 @@ public sealed class Main : Plugin<Settings>
         }
         var from = result.Season is { } shown ? $"season {shown} ({result.Source})" : "no season";
         var databases = result.Databases.Length > 0 ? $" from {result.Databases}" : "";
-        Settings.Status = result.Error is { } error ? $"download failed: {error} - {from}" : $"{_prices.Count} prices{databases}, {from}, updated {at ?? DateTime.Now:HH:mm}";
+        _statusBase = result.Error is { } error ? $"download failed: {error} - {from}" : $"{_prices.Count} prices{databases}, {from}, updated {at ?? DateTime.Now:HH:mm}";
+        UpdateStatus();
     }
 
     public override void Render()

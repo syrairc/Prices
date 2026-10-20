@@ -29,6 +29,8 @@ public sealed class Settings : PluginSettings
     public bool UseEtor = true;
     public bool UseLocal;
     public int MinSamples;
+    public int IgnoreOlderThanDays;
+    public int PurgeAfterDays;
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
@@ -166,7 +168,7 @@ public sealed class Settings : PluginSettings
     {
         PriceSource.Titrack => "TITrack's community price server - crowd-sourced Exchange searches, many items, some prices skewed by filtered searches",
         PriceSource.Etor => "ETor's community price server - only downloaded, nothing is sent. An unofficial interface, it can change or go away",
-        _ => "Your own database, filled from the market screen - not built yet, does nothing for now",
+        _ => "Your own database, filled from the trade house while it is open - prices come from the cheap pile of commodity listings you scanned",
     };
 
     void DrawSources()

@@ -90,6 +90,18 @@ public sealed class SourcesTests
     }
 
     [Test]
+    public void CombineSkipsPricesOlderThanNotBefore()
+    {
+        var limit = new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+        var old = new Dictionary<int, Price> { [1] = new(10, null, null, limit.AddDays(-1)), [2] = new(20, null, null) };
+        var fresh = new Dictionary<int, Price> { [1] = new(99, null, null, limit.AddDays(1)) };
+        var merged = PriceSources.Combine([old, fresh], 0, limit);
+        Check.Equal(99f, merged[1].Median);
+        Check.Equal(20f, merged[2].Median);
+        Check.Equal(10f, PriceSources.Combine([old, fresh])[1].Median);
+    }
+
+    [Test]
     public void CombineTakesTheFirstTableThatHasTheItem()
     {
         var merged = PriceSources.Combine([Table((1, 10), (2, 20)), Table((2, 99), (3, 30))]);
