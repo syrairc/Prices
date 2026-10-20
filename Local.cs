@@ -119,6 +119,8 @@ public sealed class LocalBook
     int? _baseCount;
     ILookup<string, LocalRow>? _tiers;
 
+    public int Version { get; private set; }
+
     public int Count => _rows.Count;
 
     public int BaseCount => _baseCount ??= _rows.Values.Select(row => row.BaseId).Distinct().Count();
@@ -143,6 +145,7 @@ public sealed class LocalBook
                 _rows[good.GoodId] = Create(good, sold, nowUnix);
                 _newRows.Add(good.GoodId);
                 (_baseCount, _tiers) = (null, null);
+                Version++;
                 changed = true;
                 continue;
             }
@@ -164,6 +167,7 @@ public sealed class LocalBook
             }
             if (important)
             {
+                Version++;
                 changed = true;
                 MarkUpdated(row);
             }
@@ -281,6 +285,7 @@ public sealed class LocalBook
             _newAffixes.Remove(id);
         }
         (_baseCount, _tiers) = (null, null);
+        Version++;
         _compact = true;
         return stale.Count;
     }
@@ -304,6 +309,7 @@ public sealed class LocalBook
         {
             // whatever was read stays, the rest comes back from the next scan
         }
+        Version++;
     }
 
     bool Replay(string text)

@@ -40,6 +40,7 @@ public sealed class Settings : PluginSettings
     [JsonIgnore] public IReadOnlyDictionary<PriceSource, IReadOnlyDictionary<int, Price>> Tables = new Dictionary<PriceSource, IReadOnlyDictionary<int, Price>>();
 
     [JsonIgnore] public LegendaryPrices? Legendaries;
+    [JsonIgnore] internal LocalBook? Book;
 
     public bool ShowTotals = true;
     public bool Lock = true;
@@ -99,7 +100,10 @@ public sealed class Settings : PluginSettings
         new() { Header = "Updated", Width = 130, SortKey = row => row.Price.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
     ];
 
-    bool _showLegendaries;
+    enum LocalView { Prices, Legendaries, Listings }
+
+    LocalView _localView;
+    readonly LocalListings _listings = new();
     string _legendaryFilter = "";
     LegendaryPrices? _viewLegendaries;
     List<LegendaryEntry> _legendaryRows = [];
@@ -134,10 +138,15 @@ public sealed class Settings : PluginSettings
         if (_view == PriceSource.Local)
         {
             ImGui.SameLine();
-            ImGui.Checkbox("Legendaries##dbleg", ref _showLegendaries);
-            if (_showLegendaries)
+            Combo.Enum(ref _localView, "localview");
+            if (_localView == LocalView.Legendaries)
             {
                 DrawLegendaries();
+                return;
+            }
+            if (_localView == LocalView.Listings)
+            {
+                _listings.Draw(Book);
                 return;
             }
         }

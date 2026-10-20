@@ -246,6 +246,7 @@ public sealed class Main : Plugin<Settings>
             if (_book is null) return;
             FlushBook();
             (_book, _bookSeason, _local, _localLegendary, _localChanged, _rebuild) = (null, null, null, null, false, true);
+            Settings.Book = null;
             return;
         }
         Game.WantTradeGoods();
@@ -284,7 +285,7 @@ public sealed class Main : Plugin<Settings>
         FlushBook();
         if (_book is null || _bookSeason is not null) _book = new LocalBook();
         if (season is { } known) _book.Load(DataDirectory, known);
-        (_bookSeason, _localChanged, _nextPurgeAt) = (season, true, 0);
+        (Settings.Book, _bookSeason, _localChanged, _nextPurgeAt) = (_book, season, true, 0);
     }
 
     void FlushBook()
