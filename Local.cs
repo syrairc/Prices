@@ -63,6 +63,7 @@ public sealed class LocalRow
     [JsonPropertyName("e")] public int EnhanceCount { get; set; }
     [JsonPropertyName("fo")] public bool Forged { get; set; }
     [JsonPropertyName("co")] public bool Corrode { get; set; }
+    [JsonPropertyName("ui")] public bool Unidentified { get; set; }
     [JsonIgnore] public long WrittenSeen { get; set; }
 
     // how many affixes sit at each tier, e.g. "A:2x5,3x1;B:2x1" (A = prefixes and suffixes, B = base attributes), empty when nothing has a tier (legendaries)
@@ -79,7 +80,7 @@ public sealed class LocalRow
     }
 
     // legendaries have no tiers: the same special id with a different set of modifiers (or corroded) is its own variant
-    [JsonIgnore] public string Variant => SpecialId == 0 ? "" : $"{SpecialId}:{string.Join(',', (Affixes ?? []).Select(affix => affix.Id).Order())}{(Corrode ? ":c" : "")}";
+    [JsonIgnore] public string Variant => SpecialId == 0 ? "" : $"{SpecialId}:{string.Join(',', (Affixes ?? []).Select(affix => affix.Id).Order())}{(Corrode ? ":c" : "")}{(Unidentified ? ":u" : "")}";
 }
 
 public sealed class LocalBook
@@ -204,6 +205,7 @@ public sealed class LocalBook
             EnhanceCount = good.EnhanceCount,
             Forged = good.Forged,
             Corrode = good.Corrode,
+            Unidentified = good.Unidentified,
         };
     }
 

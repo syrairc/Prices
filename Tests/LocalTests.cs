@@ -81,6 +81,11 @@ public sealed class LocalTests
         Check.Equal(rows[0].Variant, rows[1].Variant);
         Check.That(rows[0].Variant != rows[2].Variant, "an extra modifier is its own variant");
         Check.That(rows[0].Variant != rows[3].Variant, "a corroded one is its own variant");
+        var hidden = new LocalBook();
+        hidden.Add([Legendary(5, false) with { Unidentified = true }, Legendary(6, false)], Now);
+        var pair = hidden.Rows.OrderBy(row => row.GoodId).ToList();
+        Check.That(pair[0].Unidentified && !pair[1].Unidentified, "unidentified is kept");
+        Check.That(pair[0].Variant != pair[1].Variant, "an unidentified legendary is not the same variant as a bare identified one");
         var plain = new LocalBook();
         plain.Add([Good(9, 10, 5)], Now);
         Check.Equal("", plain.Rows.Single().Variant);
