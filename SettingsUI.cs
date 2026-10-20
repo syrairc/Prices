@@ -66,7 +66,7 @@ public sealed partial class Settings
                 if (ImGui.Selectable($"{file.Name}   {file.Size / 1024.0:0.#} KB   {file.Written.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}##{file.Path}", file.Path == _selectedShare)) _selectedShare = file.Path;
         }
         ImGui.EndChild();
-        Setting.Input("File path", ref _sharePath, "A price file anywhere on this PC", id: "SharePath", max: 520);
+        Setting.FilePath("File path", ref _sharePath, "A price file anywhere on this PC", "SharePath", 520, new EmberHUD.DialogFilter("Price files", "*.gz;*.json"), new EmberHUD.DialogFilter("All files", "*.*"));
         if (ImGui.Button("Import path##share") && ImportShare is { } importPath) _shareResult = importPath(_sharePath);
         if (_shareResult.Length > 0) ImGui.TextWrapped(_shareResult);
     }

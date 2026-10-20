@@ -87,6 +87,7 @@ internal sealed class ListingRow
 
 internal sealed class LocalListings
 {
+    public const string FeIcon = "UI_Item_chuhuoyuanzhiV3_Icon_128";
     const string Any = "Any";
     const string NoTiers = "(no tiers)";
     const int DetailLines = 8;
@@ -110,16 +111,35 @@ internal sealed class LocalListings
     {
         _columns =
         [
-            new() { Header = "Name", SortKey = row => row.Name, Draw = (row, _) => { if (ImGui.Selectable(row.Name + "##sel", row.GoodId == SelectedGoodId, ImGuiSelectableFlags.SpanAllColumns)) SelectedGoodId = row.GoodId; } },
-            new() { Header = "Price (FE)", Width = 90, SortKey = row => row.Price, Draw = (row, _) => ImGui.TextUnformatted(row.Price.ToString(CultureInfo.InvariantCulture)) },
+            new() { Header = "Name", SortKey = row => row.Name, Draw = (row, _) => DrawName(row) },
+            new() { Header = "Price", Width = 110, SortKey = row => row.Price, Draw = (row, _) => DrawPrice(row.Price) },
             new() { Header = "Qty", Width = 50, SortKey = row => row.Quantity, Draw = (row, _) => ImGui.TextUnformatted(row.Quantity.ToString(CultureInfo.InvariantCulture)) },
-            new() { Header = "Rare", Width = 60, SortKey = row => row.Rare, Draw = (row, _) => ImGui.TextUnformatted(row.RareLabel) },
             new() { Header = "Item lvl", Width = 60, SortKey = row => row.ItemLevel, Draw = (row, _) => ImGui.TextUnformatted(row.ItemLevel.ToString(CultureInfo.InvariantCulture)) },
             new() { Header = "Tier mix", Width = 200, SortKey = row => row.TierText, Draw = (row, _) => ImGui.TextUnformatted(row.TierText) },
-            new() { Header = "Flags", Width = 150, SortKey = row => row.FlagsText, Draw = (row, _) => ImGui.TextUnformatted(row.FlagsText) },
             new() { Header = "Last seen", Width = 120, SortKey = row => row.LastSeen, Draw = (row, _) => ImGui.TextUnformatted(row.LastSeenText) },
-            new() { Header = "First seen", Width = 120, SortKey = row => row.FirstSeen, Draw = (row, _) => ImGui.TextUnformatted(row.FirstSeenText) },
         ];
+    }
+
+    void DrawName(ListingRow row)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, EColor.ToVector4(GameColors.Rarity(row.Rare)));
+        if (ImGui.Selectable(row.Name + "##sel", row.GoodId == SelectedGoodId, ImGuiSelectableFlags.SpanAllColumns)) SelectedGoodId = row.GoodId;
+        ImGui.PopStyleColor();
+    }
+
+    static void DrawPrice(long price)
+    {
+        var text = price.ToString("N0", CultureInfo.InvariantCulture);
+        var left = ImGui.GetCursorPosX();
+        var right = left + ImGui.GetContentRegionAvail().X;
+        var height = ImGui.GetTextLineHeight();
+        if (EmberHUD.Draw.TryGameIcon(FeIcon, out var icon))
+        {
+            Controls.IconImage(icon, height, System.Drawing.Color.White);
+            ImGui.SameLine(right - ImGui.CalcTextSize(text).X);
+        }
+        else ImGui.SetCursorPosX(MathF.Max(left, right - ImGui.CalcTextSize(text).X));
+        ImGui.TextUnformatted(text);
     }
 
     public IReadOnlyList<ListingRow> Shown => _shown;

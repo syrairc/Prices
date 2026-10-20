@@ -14,7 +14,7 @@ namespace Prices;
 
 public sealed class Main : Plugin<Settings>
 {
-    const string FeIcon = "UI_Item_chuhuoyuanzhiV3_Icon_128";
+    const string FeIcon = LocalListings.FeIcon;
     const float IconGap = 2;
     const float GroundGap = 4;
     const float SortGap = 8;
