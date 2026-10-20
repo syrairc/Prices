@@ -54,6 +54,7 @@ public sealed partial class Settings : PluginSettings
     [JsonIgnore] internal LocalBook? Book;
 
     public bool ShowTotals = true;
+    public bool TotalRange;
     public bool Lock = true;
     public Hotkey MoveKey = new(Key.Alt);
     public int PanelX = 40;
@@ -97,24 +98,35 @@ public sealed partial class Settings : PluginSettings
     static readonly TableColumn<Row>[] DatabaseColumns =
     [
         new() { Header = "Base ID", Width = 90, SortKey = row => row.BaseId, Draw = (row, _) => ImGui.TextUnformatted(row.BaseId.ToString()) },
-        new() { Header = "Name", SortKey = row => ItemNames.Of(row.BaseId), Draw = (row, _) => ImGui.TextUnformatted(ItemNames.Of(row.BaseId)) },
-        new() { Header = "Price (FE)", Width = 110, SortKey = row => row.Median, Draw = (row, _) => ImGui.TextUnformatted(Number(row.Median)) },
-        new() { Header = "Low", Width = 110, SortKey = row => row.Low ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Low is { } low ? Number(low) : "-") },
-        new() { Header = "High", Width = 110, SortKey = row => row.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.High is { } high ? Number(high) : "-") },
+        new() { Header = "Name", SortKey = row => ItemNames.Of(row.BaseId), Draw = (row, _) => DrawBase(row.BaseId) },
+        new() { Header = "Price", Width = 110, SortKey = row => row.Median, Draw = (row, _) => Amount(row.Median) },
+        new() { Header = "Low", Width = 110, SortKey = row => row.Low ?? -1f, Draw = (row, _) => Amount(row.Low) },
+        new() { Header = "High", Width = 110, SortKey = row => row.High ?? -1f, Draw = (row, _) => Amount(row.High) },
         new() { Header = "Samples", Width = 80, SortKey = row => row.Submissions ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Submissions?.ToString() ?? "-") },
         new() { Header = "Devices", Width = 80, SortKey = row => row.Devices ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Devices?.ToString() ?? "-") },
         new() { Header = "Updated", Width = 130, SortKey = row => row.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
     ];
 
+    static void Amount(float? value) => Controls.AmountCell(value is { } v ? Number(v) : "-", value is null ? null : LocalListings.FeIcon);
+
+    internal static HashSet<int> LegendaryBases = [];
+
+    static void DrawBase(int baseId)
+    {
+        var name = ItemNames.Of(baseId);
+        if (LegendaryBases.Contains(baseId)) ImGui.TextColored(EColor.ToVector4(GameColors.LegendaryName), name);
+        else ImGui.TextUnformatted(name);
+    }
+
     static string Number(float value) => value.ToString(value < 10 ? "0.###" : "0.#", System.Globalization.CultureInfo.InvariantCulture);
 
     static readonly TableColumn<LegendaryEntry>[] LegendaryColumns =
     [
-        new() { Header = "Name", SortKey = row => ItemNames.Of(row.SpecialId), Draw = (row, _) => ImGui.TextUnformatted(ItemNames.Of(row.SpecialId)) },
+        new() { Header = "Name", SortKey = row => ItemNames.Of(row.SpecialId), Draw = (row, _) => ImGui.TextColored(EColor.ToVector4(GameColors.LegendaryName), ItemNames.Of(row.SpecialId)) },
         new() { Header = "State", Width = 100, SortKey = row => row.Unidentified, Draw = (row, _) => ImGui.TextUnformatted(row.Unidentified ? "Unidentified" : "Identified") },
-        new() { Header = "Price (FE)", Width = 110, SortKey = row => row.Price.Median, Draw = (row, _) => ImGui.TextUnformatted(Number(row.Price.Median)) },
-        new() { Header = "Low", Width = 110, SortKey = row => row.Price.Low ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Low is { } low ? Number(low) : "-") },
-        new() { Header = "High", Width = 110, SortKey = row => row.Price.High ?? -1f, Draw = (row, _) => ImGui.TextUnformatted(row.Price.High is { } high ? Number(high) : "-") },
+        new() { Header = "Price", Width = 110, SortKey = row => row.Price.Median, Draw = (row, _) => Amount(row.Price.Median) },
+        new() { Header = "Low", Width = 110, SortKey = row => row.Price.Low ?? -1f, Draw = (row, _) => Amount(row.Price.Low) },
+        new() { Header = "High", Width = 110, SortKey = row => row.Price.High ?? -1f, Draw = (row, _) => Amount(row.Price.High) },
         new() { Header = "Samples", Width = 80, SortKey = row => row.Price.Submissions ?? -1, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Submissions?.ToString() ?? "-") },
         new() { Header = "Updated", Width = 130, SortKey = row => row.Price.Updated?.UtcTicks ?? 0L, Draw = (row, _) => ImGui.TextUnformatted(row.Price.Updated is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "-") },
     ];
@@ -148,8 +160,20 @@ public sealed partial class Settings : PluginSettings
     IReadOnlyDictionary<int, Price>? _viewTable;
     List<Row> _rows = [];
 
+    LocalBook? _legendaryBasesBook;
+    int _legendaryBasesVersion = -1;
+
+    void RefreshLegendaryBases()
+    {
+        if (ReferenceEquals(Book, _legendaryBasesBook) && (Book?.Version ?? -1) == _legendaryBasesVersion) return;
+        _legendaryBasesBook = Book;
+        _legendaryBasesVersion = Book?.Version ?? -1;
+        LegendaryBases = Book is null ? [] : [.. Book.Rows.Where(row => row.SpecialId != 0).Select(row => row.BaseId)];
+    }
+
     internal void DrawDatabase()
     {
+        RefreshLegendaryBases();
         ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted("Database");
         ImGui.SameLine(160);
@@ -192,7 +216,8 @@ public sealed partial class Settings : PluginSettings
 
     internal void DrawTotals()
     {
-        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Only what shows a tag counts - the gear colours, bags and Hide below on the Prices tab. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
+        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Only what shows a tag counts - the gear colours, bags and Hide below on the Prices tab. Each item counts at its low price (the median when there is no low), unpriced items count 0. Uses the Prices tab's text style and FE icon");
+        Setting.Checkbox("Show low-high range", ref TotalRange, "Show the totals as low-high - every item at its low price, then every item at its high price. Off = only the low total");
         Setting.Checkbox("Lock", ref Lock, "The stash total ignores the mouse while locked - hold the move key to drag it anyway");
         Setting.Hotkey("Move key", ref MoveKey, "Hold to move the stash total while locked");
     }

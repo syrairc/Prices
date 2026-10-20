@@ -112,7 +112,7 @@ internal sealed class LocalListings
         _columns =
         [
             new() { Header = "Name", SortKey = row => row.Name, Draw = (row, _) => DrawName(row) },
-            new() { Header = "Price", Width = 110, SortKey = row => row.Price, Draw = (row, _) => DrawPrice(row.Price) },
+            new() { Header = "Price", Width = 110, SortKey = row => row.Price, Draw = (row, _) => Controls.AmountCell(row.Price.ToString("N0", CultureInfo.InvariantCulture), FeIcon) },
             new() { Header = "Qty", Width = 50, SortKey = row => row.Quantity, Draw = (row, _) => ImGui.TextUnformatted(row.Quantity.ToString(CultureInfo.InvariantCulture)) },
             new() { Header = "Item lvl", Width = 60, SortKey = row => row.ItemLevel, Draw = (row, _) => ImGui.TextUnformatted(row.ItemLevel.ToString(CultureInfo.InvariantCulture)) },
             new() { Header = "Tier mix", Width = 200, SortKey = row => row.TierText, Draw = (row, _) => ImGui.TextUnformatted(row.TierText) },
@@ -122,24 +122,9 @@ internal sealed class LocalListings
 
     void DrawName(ListingRow row)
     {
-        ImGui.PushStyleColor(ImGuiCol.Text, EColor.ToVector4(GameColors.Rarity(row.Rare)));
+        ImGui.PushStyleColor(ImGuiCol.Text, EColor.ToVector4(GameColors.Rarity(row.Source.SpecialId != 0 ? 100 : row.Rare)));
         if (ImGui.Selectable(row.Name + "##sel", row.GoodId == SelectedGoodId, ImGuiSelectableFlags.SpanAllColumns)) SelectedGoodId = row.GoodId;
         ImGui.PopStyleColor();
-    }
-
-    static void DrawPrice(long price)
-    {
-        var text = price.ToString("N0", CultureInfo.InvariantCulture);
-        var left = ImGui.GetCursorPosX();
-        var right = left + ImGui.GetContentRegionAvail().X;
-        var height = ImGui.GetTextLineHeight();
-        if (EmberHUD.Draw.TryGameIcon(FeIcon, out var icon))
-        {
-            Controls.IconImage(icon, height, System.Drawing.Color.White);
-            ImGui.SameLine(right - ImGui.CalcTextSize(text).X);
-        }
-        else ImGui.SetCursorPosX(MathF.Max(left, right - ImGui.CalcTextSize(text).X));
-        ImGui.TextUnformatted(text);
     }
 
     public IReadOnlyList<ListingRow> Shown => _shown;
