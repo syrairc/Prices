@@ -87,6 +87,25 @@ public sealed class LocalTests
     }
 
     [Test]
+    public void TierKeyCountsAffixesPerTierAndNarrowsASearch()
+    {
+        var book = new LocalBook();
+        TradeAffix A(TradeAffixKind kind, int id, int tier) => new(kind, id, tier, [1f], "x");
+        var same = new[] { A(TradeAffixKind.Prefix, 1, 2), A(TradeAffixKind.Prefix, 2, 2), A(TradeAffixKind.Suffix, 3, 3), A(TradeAffixKind.BaseAttribute, 4, 2), A(TradeAffixKind.Implicit, 5, 1) };
+        var reordered = new[] { A(TradeAffixKind.BaseAttribute, 4, 2), A(TradeAffixKind.Suffix, 9, 3), A(TradeAffixKind.Prefix, 7, 2), A(TradeAffixKind.Prefix, 8, 2) };
+        var weaker = new[] { A(TradeAffixKind.Prefix, 1, 2), A(TradeAffixKind.Prefix, 2, 3), A(TradeAffixKind.Suffix, 3, 3), A(TradeAffixKind.BaseAttribute, 4, 2) };
+        book.Add([Good(1, 10, 5, stackMax: 1, affixes: same), Good(2, 10, 6, stackMax: 1, affixes: reordered), Good(3, 10, 7, stackMax: 1, affixes: weaker), Good(4, 10, 8, stackMax: 1)], Now);
+        var rows = book.Rows.OrderBy(row => row.GoodId).ToList();
+        Check.Equal("A:2x2,3x1;B:2x1", rows[0].TierKey);
+        Check.Equal(rows[0].TierKey, rows[1].TierKey);
+        Check.That(rows[0].TierKey != rows[2].TierKey, "a different tier mix");
+        Check.Equal("", rows[3].TierKey);
+        Check.Equal(2, book.WithTierKey(rows[0].TierKey).Count());
+        book.Purge(Now + 1);
+        Check.Equal(0, book.WithTierKey(rows[0].TierKey).Count());
+    }
+
+    [Test]
     public void PricePickIgnoresTheOutlier()
     {
         var book = new LocalBook();

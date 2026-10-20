@@ -65,6 +65,19 @@ public sealed class LocalRow
     [JsonPropertyName("co")] public bool Corrode { get; set; }
     [JsonIgnore] public long WrittenSeen { get; set; }
 
+    // how many affixes sit at each tier, e.g. "A:2x5,3x1;B:2x1" (A = prefixes and suffixes, B = base attributes), empty when nothing has a tier (legendaries)
+    [JsonIgnore] public string TierKey => _tierKey ??= TierKeyOf(Affixes);
+
+    string? _tierKey;
+
+    static string TierKeyOf(RowAffix[]? affixes)
+    {
+        static string Part(IEnumerable<RowAffix> list) => string.Join(',', list.Where(affix => affix.Tier > 0).GroupBy(affix => affix.Tier).OrderBy(group => group.Key).Select(group => $"{group.Key}x{group.Count()}"));
+        var rolled = Part((affixes ?? []).Where(affix => affix.Kind is TradeAffixKind.Prefix or TradeAffixKind.Suffix));
+        var bases = Part((affixes ?? []).Where(affix => affix.Kind == TradeAffixKind.BaseAttribute));
+        return rolled.Length == 0 && bases.Length == 0 ? "" : $"A:{rolled};B:{bases}";
+    }
+
     // legendaries have no tiers: the same special id with a different set of modifiers (or corroded) is its own variant
     [JsonIgnore] public string Variant => SpecialId == 0 ? "" : $"{SpecialId}:{string.Join(',', (Affixes ?? []).Select(affix => affix.Id).Order())}{(Corrode ? ":c" : "")}";
 }
@@ -101,6 +114,7 @@ public sealed class LocalBook
     int _fileUpdates;
     bool _compact;
     int? _baseCount;
+    ILookup<string, LocalRow>? _tiers;
 
     public int Count => _rows.Count;
 
@@ -111,6 +125,8 @@ public sealed class LocalBook
     internal IReadOnlyDictionary<int, string> AffixTexts => _affixes;
 
     internal IEnumerable<LocalRow> Rows => _rows.Values;
+
+    public IEnumerable<LocalRow> WithTierKey(string key) => (_tiers ??= _rows.Values.ToLookup(row => row.TierKey))[key];
 
     public bool Add(IEnumerable<TradeGood> goods, long nowUnix)
     {
@@ -123,7 +139,7 @@ public sealed class LocalBook
             {
                 _rows[good.GoodId] = Create(good, sold, nowUnix);
                 _newRows.Add(good.GoodId);
-                _baseCount = null;
+                (_baseCount, _tiers) = (null, null);
                 changed = true;
                 continue;
             }
@@ -232,7 +248,7 @@ public sealed class LocalBook
             _affixes.Remove(id);
             _newAffixes.Remove(id);
         }
-        _baseCount = null;
+        (_baseCount, _tiers) = (null, null);
         _compact = true;
         return stale.Count;
     }
@@ -282,7 +298,7 @@ public sealed class LocalBook
             else
             {
                 _rows[row.GoodId] = row;
-                _baseCount = null;
+                (_baseCount, _tiers) = (null, null);
             }
         }
         else if (line.Update is { } update)
