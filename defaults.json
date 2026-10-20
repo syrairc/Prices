@@ -45,6 +45,7 @@
   "MinSamples": 0,
   "IgnoreOlderThanDays": 0,
   "PurgeAfterDays": 0,
+  "ExcludeOutliers": true,
   "Priority": [
     "Etor",
     "Titrack",

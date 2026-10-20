@@ -46,6 +46,38 @@ public sealed class LegendaryTests
     }
 
     [Test]
+    public void AMajorityPriceBeatsTheMinorityInBothDirections()
+    {
+        var cheap = new List<TradeGood>();
+        for (var i = 0; i < 900; i++) cheap.Add(Gear(i + 1, 1));
+        for (var i = 0; i < 30; i++) cheap.Add(Gear(1000 + i, 200));
+        Check.Equal(1f, Book([.. cheap]).Of(Sp, false, [])!.Value.Median);
+        var dear = new List<TradeGood>();
+        for (var i = 0; i < 900; i++) dear.Add(Gear(i + 1, 200));
+        for (var i = 0; i < 30; i++) dear.Add(Gear(1000 + i, 1));
+        var book = new LocalBook();
+        book.Add(dear, Now);
+        Check.Equal(200f, book.Legendary(Now, LocalBook.Recent).Of(Sp, false, [])!.Value.Median);
+        Check.Equal(200f, book.Legendary(Now, LocalBook.Recent).Of(Sp, false, [])!.Value.Low!.Value);
+        Check.Equal(1f, book.Legendary(Now, LocalBook.Recent, excludeOutliers: false).Of(Sp, false, [])!.Value.Low!.Value);
+    }
+
+    [Test]
+    public void TheOutlierSettingRebuildsTheLocalPrices()
+    {
+        var goods = new List<TradeGood>();
+        for (var i = 0; i < 90; i++) goods.Add(Gear(i + 1, 200));
+        for (var i = 0; i < 10; i++) goods.Add(Gear(1000 + i, 1));
+        var plugin = Plugin([.. goods]);
+        Check.Equal(200f, plugin.Legendary!.Of(Sp, false, [])!.Value.Median);
+        plugin.Settings.ExcludeOutliers = false;
+        plugin.UnixClock = () => Now + 10;
+        plugin.Tick();
+        Check.Equal(1f, plugin.Legendary!.Of(Sp, false, [])!.Value.Median);
+        plugin.Dispose();
+    }
+
+    [Test]
     public void PickFencesOutliersAndSkipsSoldOldAndCommodityRows()
     {
         var goods = new List<TradeGood>();

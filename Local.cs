@@ -211,7 +211,7 @@ public sealed class LocalBook
         };
     }
 
-    public Dictionary<int, Price> Prices(long nowUnix, TimeSpan window)
+    public Dictionary<int, Price> Prices(long nowUnix, TimeSpan window, bool excludeOutliers = true)
     {
         var cutoff = nowUnix - (long)window.TotalSeconds;
         var groups = new Dictionary<int, List<(double Unit, long Seen)>>();
@@ -222,23 +222,23 @@ public sealed class LocalBook
             list.Add(((double)row.Price / row.Quantity, row.LastSeen));
         }
         var prices = new Dictionary<int, Price>();
-        foreach (var (baseId, list) in groups) prices[baseId] = Pick(list);
+        foreach (var (baseId, list) in groups) prices[baseId] = Pick(list, excludeOutliers);
         return prices;
     }
 
-    internal static Price Pick(List<(double Unit, long Seen)> list)
+    internal static Price Pick(List<(double Unit, long Seen)> list, bool excludeOutliers = true)
     {
         list.Sort((a, b) => a.Unit.CompareTo(b.Unit));
         var q1 = list[list.Count / 4].Unit;
         var q3 = list[list.Count * 3 / 4].Unit;
         var fence = (q3 - q1) * 1.5;
-        var kept = list.Where(entry => entry.Unit >= q1 - fence && entry.Unit <= q3 + fence).ToList();
+        var kept = excludeOutliers ? list.Where(entry => entry.Unit >= q1 - fence && entry.Unit <= q3 + fence).ToList() : list;
         var units = kept.Select(entry => entry.Unit).ToArray();
         var newest = kept.Max(entry => entry.Seen);
         return new Price((float)Exchange.ReferencePrice(units), (float)units[0], (float)units[(int)((units.Length - 1) * 0.9)], DateTimeOffset.FromUnixTimeSeconds(newest), units.Length, 1);
     }
 
-    public LegendaryPrices Legendary(long nowUnix, TimeSpan window)
+    public LegendaryPrices Legendary(long nowUnix, TimeSpan window, bool excludeOutliers = true)
     {
         var cutoff = nowUnix - (long)window.TotalSeconds;
         var unidentified = new Dictionary<int, List<(double, long)>>();
@@ -260,7 +260,7 @@ public sealed class LocalBook
                 AddTo(variants, row.VariantKey, entry);
             }
         }
-        static Dictionary<TKey, Price> Priced<TKey>(Dictionary<TKey, List<(double, long)>> groups) where TKey : notnull => groups.ToDictionary(pair => pair.Key, pair => Pick(pair.Value));
+        Dictionary<TKey, Price> Priced<TKey>(Dictionary<TKey, List<(double, long)>> groups) where TKey : notnull => groups.ToDictionary(pair => pair.Key, pair => Pick(pair.Value, excludeOutliers));
         return new LegendaryPrices(Priced(unidentified), Priced(identified), Priced(variants));
     }
 

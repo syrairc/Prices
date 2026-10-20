@@ -17,6 +17,8 @@ public sealed class Main : Plugin<Settings>
     const string FeIcon = "UI_Item_chuhuoyuanzhiV3_Icon_128";
     const float IconGap = 2;
     const float GroundGap = 4;
+    const float SortGap = 8;
+    const string SortPart = "UIButton_Arrage";
 
     static readonly Dictionary<int, Price> NoPrices = [];
 
@@ -36,13 +38,11 @@ public sealed class Main : Plugin<Settings>
     IReadOnlyDictionary<int, Price>? _local;
     LegendaryPrices? _localLegendary;
     TradeGood[]? _lastGoods;
-    bool _localChanged, _rebuild;
+    bool _localChanged, _rebuild, _builtOutliers = true;
     long _nextLocalAt, _nextFlushAt, _nextPurgeAt;
     Contribution? _contribution;
     CancellationTokenSource? _stopContributing;
     readonly Dictionary<int, InventoryItem[]> _stashTabs = [];
-    readonly List<(string Left, string Right)> _totals = new(3);
-    readonly TextStyle _totalStyle = TextStyle.Hud();
     readonly Overlay _overlay = new();
     int _unusedWidth, _unusedHeight;
 
@@ -256,10 +256,11 @@ public sealed class Main : Plugin<Settings>
             _lastGoods = goods;
             if (_book!.Add(goods, now)) _localChanged = true;
         }
+        if (Settings.ExcludeOutliers != _builtOutliers) (_builtOutliers, _localChanged, _nextLocalAt) = (Settings.ExcludeOutliers, true, 0);
         if (_localChanged && now >= _nextLocalAt)
         {
-            _local = _book!.Prices(now, LocalBook.Recent);
-            _localLegendary = _book.Legendary(now, LocalBook.Recent);
+            _local = _book!.Prices(now, LocalBook.Recent, _builtOutliers);
+            _localLegendary = _book.Legendary(now, LocalBook.Recent, _builtOutliers);
             (_localChanged, _rebuild, _nextLocalAt) = (false, true, now + 5);
         }
         // ponytail: flushed on the main thread, a few hundred lines per 5 s is nothing - move to the job if a scan ever grows to tens of thousands
@@ -337,39 +338,38 @@ public sealed class Main : Plugin<Settings>
         if (state.Stash is { } shown && state.StashItems is { } shownItems) _stashTabs[shown.Tab] = shownItems;
         if (!Settings.ShowTotals || OpenKind(state.Ui) is null) return;
         Game.WantInventory();
-        _totals.Clear();
-        if (state.Inventory is { } inventory) _totals.Add(("Inventory", Fe(Tags.Total(inventory, _prices, Legendary))));
+        var icon = TagIcon(out var hasIcon);
+        if (state.Inventory is { } inventory && SortButton(state.Ui) is { } sort)
+            DrawTag(Fe(Tags.Total(inventory, _prices, Legendary)), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
         if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
         {
             var all = 0.0;
             foreach (var items in _stashTabs.Values) all += Tags.Total(items, _prices, Legendary);
-            _totals.Add(("Stash tab", Fe(Tags.Total(tab, _prices, Legendary))));
-            _totals.Add(($"Stash ({_stashTabs.Count} {(_stashTabs.Count == 1 ? "tab" : "tabs")} seen)", Fe(all)));
-        }
-        if (_totals.Count == 0) return;
-
-        const float Pad = 8;
-        const float Gap = 24;
-        var width = 0f;
-        foreach (var (left, right) in _totals) width = MathF.Max(width, Draw.MeasureText(left, _totalStyle).X + Gap + Draw.MeasureText(right, _totalStyle).X);
-        var rowHeight = Draw.RowHeight(_totalStyle);
-        _overlay.Locked = Settings.Lock;
-        _overlay.MoveHeld = Settings.MoveKey.Key != Key.None && Input.IsDown(Settings.MoveKey.Key);
-        var origin = new Vector2(Settings.PanelX, Settings.PanelY);
-        var size = new Vector2(width + Pad * 2, rowHeight * _totals.Count + Pad * 2);
-        var (hovered, _, active) = _overlay.Handle("prices-totals", ref origin, size, ref Settings.PanelX, ref Settings.PanelY, ref _unusedWidth, 60, 4000, ref _unusedHeight, 0, 0, Overlay.ResizeEdge.None);
-        if (hovered || active) Overlay.ClickBlocker("prices-totals", origin, size);
-        Draw.RectFilled(origin, origin + size, GameColors.LabelBackground, 4);
-        if (_overlay.Movable) Overlay.DragHint(origin, origin + size, active, hovered, Overlay.ResizeEdge.None);
-        var y = origin.Y + Pad;
-        foreach (var (left, right) in _totals)
-        {
-            Draw.Row(new Vector2(origin.X + Pad, y), width, left, right, _totalStyle);
-            y += rowHeight;
+            DrawTag($"{Fe(Tags.Total(tab, _prices, Legendary))} / {Fe(all)}", icon, hasIcon, Movable);
         }
     }
 
-    static string Fe(double fe) => (Tags.Format(fe) ?? "0") + " FE";
+    Vector2 Movable(Vector2 size)
+    {
+        _overlay.Locked = Settings.Lock;
+        _overlay.MoveHeld = Settings.MoveKey.Key != Key.None && Input.IsDown(Settings.MoveKey.Key);
+        var origin = new Vector2(Settings.PanelX, Settings.PanelY);
+        var (hovered, _, active) = _overlay.Handle("prices-stash", ref origin, size, ref Settings.PanelX, ref Settings.PanelY, ref _unusedWidth, 0, 4000, ref _unusedHeight, 0, 0, Overlay.ResizeEdge.None);
+        if (hovered || active) Overlay.ClickBlocker("prices-stash", origin, size);
+        if (_overlay.Movable) Overlay.DragHint(origin, origin + size, active, hovered, Overlay.ResizeEdge.None);
+        return origin;
+    }
+
+    static NamedRect? SortButton(GameUi ui)
+    {
+        foreach (var panel in ui.Panels)
+            if (panel.Kind == PanelKind.Inventory)
+                foreach (var part in panel.Parts)
+                    if (part.Name == SortPart) return part;
+        return null;
+    }
+
+    static string Fe(double fe) => Tags.Format(fe) ?? "0";
 
     void DrawInventory()
     {

@@ -31,6 +31,7 @@ public sealed class Settings : PluginSettings
     public int MinSamples;
     public int IgnoreOlderThanDays;
     public int PurgeAfterDays;
+    public bool ExcludeOutliers = true;
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
@@ -163,9 +164,9 @@ public sealed class Settings : PluginSettings
 
     internal void DrawTotals()
     {
-        Setting.Checkbox("Show totals", ref ShowTotals, "A small panel with the FE value of your whole inventory (all four bags) while the bag or stash is open, plus the open stash tab and every stash tab you opened since Ember started - the game only loads a tab once you open it. Gear counts at its median price, unpriced items count 0");
-        Setting.Checkbox("Lock", ref Lock, "A locked panel ignores the mouse - hold the move key to drag it anyway");
-        Setting.Hotkey("Move key", ref MoveKey, "Hold to move the panel while locked");
+        Setting.Checkbox("Show totals", ref ShowTotals, "The FE value of your whole inventory (all four bags) next to the bag's sort button, and while the stash is open the open tab / every stash tab opened since Ember started - the game only loads a tab once you open it. Gear counts at its median price, unpriced items count 0. Uses the Prices tab's text style and FE icon");
+        Setting.Checkbox("Lock", ref Lock, "The stash total ignores the mouse while locked - hold the move key to drag it anyway");
+        Setting.Hotkey("Move key", ref MoveKey, "Hold to move the stash total while locked");
     }
 
     internal void DrawGround()
@@ -236,6 +237,7 @@ public sealed class Settings : PluginSettings
             EmberHUD.Ui.Text.Tip(Tip(source));
         }, new ListOpts { ShowIndex = true })) Priority = [.. order];
         Setting.Slider("Minimum samples", ref MinSamples, 0, 200, "Ignore a price that fewer than this many Exchange searches back, the next database in the list prices the item instead. 0 = keep everything. Only TITrack reports sample counts, ETor prices always stay");
+        Setting.Checkbox("Exclude price outliers", ref ExcludeOutliers, "Local prices only. Drops listings priced far above or below the bulk before picking the price - if most of an item is listed at 1 FE and a few at 200 FE, the item is worth 1 FE. Off = every listing counts");
         Setting.Slider("Ignore older than (days)", ref IgnoreOlderThanDays, 0, 90, "Ignore a price whose last update is older than this many days, the next database in the list prices the item instead. 0 = keep everything. Applies to every database");
         Setting.Slider("Purge local data after (days)", ref PurgeAfterDays, 0, 365, "Delete saved local trade house listings that were last seen more than this many days ago, on start and then every hour. 0 = never. Only your local database is purged, TITrack and ETor are downloaded copies");
         if (ImGui.Button("Purge now##local")) PurgeResult = PurgeAfterDays <= 0 ? "Set a number of days first" : PurgeLocal is { } purge ? $"Removed {purge()} saved listings" : "";
