@@ -18,6 +18,15 @@ public sealed class TagsTests
     }
 
     [Test]
+    public void ValueCanTakeEitherEnd()
+    {
+        var prices = new Dictionary<int, Price> { [1] = new(5, 2, 9), [2] = new(5, null, null) };
+        Check.Equal(8.0, Tags.Value(Item(InventoryBag.Commodities, 1, 4), prices, null, Tags.LowEnd));
+        Check.Equal(36.0, Tags.Value(Item(InventoryBag.Commodities, 1, 4), prices, null, Tags.HighEnd));
+        Check.Equal(20.0, Tags.Value(Item(InventoryBag.Commodities, 2, 4), prices, null, Tags.LowEnd));
+    }
+
+    [Test]
     public void TotalSumsMedianTimesCountSkippingUnpriced()
     {
         var prices = new Dictionary<int, Price> { [1] = new(2.5f, null, null), [2] = new(100, 50, 300) };

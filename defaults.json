@@ -30,6 +30,7 @@
   "MinValue": 0,
   "MinValueGearOnly": false,
   "ShowTotals": true,
+  "TotalRange": false,
   "Lock": true,
   "MoveKey": "Alt",
   "PanelX": 40,

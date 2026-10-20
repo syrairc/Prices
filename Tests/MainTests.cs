@@ -100,9 +100,9 @@ public sealed class MainTests
         var plugin = Plugin();
         InventoryItem[] items = [Item(0, 1) with { Bag = InventoryBag.Equipment, RareValue = 3 }, Item(1, 1) with { Bag = InventoryBag.Equipment, RareValue = 100 }];
         plugin.Settings.ShowPurple = true;
-        Check.Equal(80.0, plugin.TotalOf(items));
+        Check.Equal(80.0, plugin.TotalOf(items).Low);
         plugin.Settings.ShowPurple = false;
-        Check.Equal(40.0, plugin.TotalOf(items));
+        Check.Equal(40.0, plugin.TotalOf(items).Low);
     }
 
     [Test]
@@ -111,14 +111,27 @@ public sealed class MainTests
         var plugin = Plugin();
         plugin.Prices = new Dictionary<int, Price> { [1] = new(8, null, null), [2] = new(1, null, null) };
         InventoryItem[] items = [Item(0, 1), Item(1, 2), Item(2, 2) with { Bag = InventoryBag.Equipment, Count = 1 }];
-        Check.Equal(40.0 + 5 + 1, plugin.TotalOf(items));
+        Check.Equal(40.0 + 5 + 1, plugin.TotalOf(items).Low);
         plugin.Settings.MinValue = 10;
-        Check.Equal(40.0, plugin.TotalOf(items));
+        Check.Equal(40.0, plugin.TotalOf(items).Low);
         plugin.Settings.MinValueGearOnly = true;
-        Check.Equal(40.0 + 5, plugin.TotalOf(items));
+        Check.Equal(40.0 + 5, plugin.TotalOf(items).Low);
         plugin.Settings.MinValueGearOnly = false;
         var one = Vertices(plugin, State(3, Item(0, 1)));
         Check.Equal(one, Vertices(plugin, State(3, Item(0, 1), Item(1, 2))));
+    }
+
+    [Test]
+    public void TotalIsTheSumOfLowsAndHighsWithTheMedianStandingInForAMissingEnd()
+    {
+        var plugin = Plugin();
+        plugin.Prices = new Dictionary<int, Price> { [1] = new(8, 2, 30), [2] = new(1, null, null) };
+        InventoryItem[] items = [Item(0, 1), Item(1, 2)];
+        Check.Equal((10.0 + 5, 150.0 + 5), plugin.TotalOf(items));
+        Check.Equal("15", plugin.TotalText(plugin.TotalOf(items)));
+        plugin.Settings.TotalRange = true;
+        Check.Equal("15-155", plugin.TotalText(plugin.TotalOf(items)));
+        Check.Equal("5.0", plugin.TotalText((5, 5)));
     }
 
     [Test]

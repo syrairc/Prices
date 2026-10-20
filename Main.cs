@@ -413,22 +413,28 @@ public sealed class Main : Plugin<Settings>
         Game.WantInventory();
         var icon = TagIcon(out var hasIcon);
         if (state.Inventory is { } inventory && SortButton(state.Ui) is { } sort)
-            DrawTag(Fe(TotalOf(inventory)), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
+            DrawTag(TotalText(TotalOf(inventory)), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
         if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
         {
-            var all = 0.0;
-            foreach (var items in _stashTabs.Values) all += TotalOf(items);
-            DrawTag($"{Fe(TotalOf(tab))} / {Fe(all)}", icon, hasIcon, Movable);
+            (double Low, double High) all = default;
+            foreach (var items in _stashTabs.Values) all = TotalOf(items) is var (low, high) ? (all.Low + low, all.High + high) : all;
+            DrawTag($"{TotalText(TotalOf(tab))} / {TotalText(all)}", icon, hasIcon, Movable);
         }
     }
 
-    internal double TotalOf(IEnumerable<InventoryItem> items)
+    internal (double Low, double High) TotalOf(IEnumerable<InventoryItem> items)
     {
-        var total = 0.0;
+        double low = 0, high = 0;
         foreach (var item in items)
-            if (Settings.Shows(item) && Tags.Value(item, _prices, Legendary) is var value && !Settings.TooCheap(item, value)) total += value;
-        return total;
+        {
+            if (!Settings.Shows(item) || Settings.TooCheap(item, Tags.Value(item, _prices, Legendary))) continue;
+            low += Tags.Value(item, _prices, Legendary, Tags.LowEnd);
+            high += Tags.Value(item, _prices, Legendary, Tags.HighEnd);
+        }
+        return (low, high);
     }
+
+    internal string TotalText((double Low, double High) total) => Settings.TotalRange && Fe(total.High) is var high && Fe(total.Low) is var low && low != high ? $"{low}-{high}" : Fe(total.Low);
 
     Vector2 Movable(Vector2 size)
     {
