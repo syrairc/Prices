@@ -57,6 +57,14 @@ public sealed class LocalBook
 
     static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
     static readonly Regex Markup = new("<[^>]*>");
+    static readonly Regex Roll = new(@"<p>(\+?)(-?[\d.]+)(\([^)]*\))?</p>");
+
+    // the roll is stored per row, so the shared text keeps only the numbered slot and the tier range
+    static string Template(string text)
+    {
+        var slot = 0;
+        return Markup.Replace(Roll.Replace(text, match => $"{match.Groups[1].Value}{{{slot++}}}{match.Groups[3].Value}"), "").Trim();
+    }
 
     readonly Dictionary<long, LocalRow> _rows = [];
     readonly Dictionary<int, string> _affixes = [];
@@ -127,7 +135,7 @@ public sealed class LocalBook
     {
         var item = good.Item;
         foreach (var affix in good.Affixes)
-            if (_affixes.TryAdd(affix.Id, Markup.Replace(affix.Text, "").Trim())) _newAffixes.Add(affix.Id);
+            if (_affixes.TryAdd(affix.Id, Template(affix.Text))) _newAffixes.Add(affix.Id);
         return new LocalRow
         {
             GoodId = good.GoodId,

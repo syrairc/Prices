@@ -60,6 +60,16 @@ public sealed class LocalTests
     }
 
     [Test]
+    public void AffixTextKeepsTheRangeButNotTheRoll()
+    {
+        var book = new LocalBook();
+        book.Add([Good(1, 10, 5, affixes: [new TradeAffix(TradeAffixKind.Prefix, 7, 2, [55f], "<p>+55(46-55)</p>% Gear <e id=1>Physical</e> Damage"), new TradeAffix(TradeAffixKind.BaseAttribute, 8, 2, [154f, 160f], "<p>154</p> - <p>160</p> Physical Damage"), new TradeAffix(TradeAffixKind.Suffix, 9, 2, [-15f], "<p>-15(-15--14)</p>% additional Attack Damage")])], Now);
+        Check.Equal("+{0}(46-55)% Gear Physical Damage", book.AffixTexts[7]);
+        Check.Equal("{0} - {1} Physical Damage", book.AffixTexts[8]);
+        Check.Equal("{0}(-15--14)% additional Attack Damage", book.AffixTexts[9]);
+    }
+
+    [Test]
     public void PricePickIgnoresTheOutlier()
     {
         var book = new LocalBook();
