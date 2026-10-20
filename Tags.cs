@@ -38,12 +38,14 @@ public static class Tags
         return Format(price.Median * count);
     }
 
+    public static Price? Find(IReadOnlyDictionary<int, Price> prices, int id) => prices.TryGetValue(id, out var price) ? price : null;
+
     public static double Total(IEnumerable<InventoryItem> items, IReadOnlyDictionary<int, Price> prices, LegendaryPrices? legendary = null)
     {
         var total = 0.0;
         foreach (var item in items)
         {
-            if (item.SpecialId != 0 && legendary?.Of(item.SpecialId, item.Unidentified, [.. item.PrefixIds, .. item.SuffixIds]) is { } special) total += special.Median;
+            if (item.SpecialId != 0 && (legendary?.Of(item.SpecialId, item.Unidentified, [.. item.PrefixIds, .. item.SuffixIds]) ?? Find(prices, item.SpecialId)) is { } special) total += special.Median;
             else if (prices.TryGetValue(item.BaseId, out var price)) total += (double)price.Median * item.Count;
         }
         return total;

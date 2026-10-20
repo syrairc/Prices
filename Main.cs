@@ -448,7 +448,7 @@ public sealed class Main : Plugin<Settings>
         int[] affixIds = specialId == 0 ? [] : [.. prefixIds ?? [], .. suffixIds ?? []];
         var key = (baseId, count, gear, specialId == 0 ? 0 : LegendaryPrices.Key(specialId, affixIds), specialId != 0 && unidentified);
         if (_tags.TryGetValue(key, out var text)) return text;
-        text = specialId != 0 && Legendary?.Of(specialId, unidentified, affixIds) is { } special
+        text = specialId != 0 && (Legendary?.Of(specialId, unidentified, affixIds) ?? Tags.Find(_prices, specialId)) is { } special
             ? Tags.Text(special, 1, gear) is { } priced ? (unidentified ? "?" + priced : priced) : null
             : Tags.Text(baseId, count, gear, _prices);
         if (text is not null) _tags[key] = text;

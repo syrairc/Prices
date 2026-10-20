@@ -151,6 +151,18 @@ public sealed class LegendaryTests
     }
 
     [Test]
+    public void CommunityPriceByLegendaryIdWhenNoLocalPrice()
+    {
+        var plugin = new Main { Prices = new Dictionary<int, Price> { [BaseId] = new(3, null, null), [Sp] = new(50, null, null) } };
+        Check.Equal("50", plugin.TagFor(BaseId, 1, true, Sp, false, [], []));
+        Check.Equal("?50", plugin.TagFor(BaseId, 1, true, Sp, true, [], []));
+        Check.Equal(50.0 + 50 + 3, Tags.Total([Bag(Sp, false), Bag(Sp, true), Bag(0, false)], plugin.Prices));
+        var local = Plugin(Gear(1, 100));
+        local.Prices = plugin.Prices;
+        Check.Equal("100", local.TagFor(BaseId, 1, true, Sp, false, [], []), "local legendary price wins");
+    }
+
+    [Test]
     public void GearShowsARangeLikeOtherGear()
     {
         var plugin = Plugin(Gear(1, 100), Gear(2, 200), Gear(3, 300), Gear(4, 400));
