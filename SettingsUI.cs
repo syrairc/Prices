@@ -50,6 +50,11 @@ public sealed partial class Settings
             RefreshShareFiles();
         }
         EmberHUD.Ui.Text.Tip("Writes one compressed file for the current season into the share folder");
+        ImGui.SameLine();
+        ImGui.BeginDisabled(!Directory.Exists(ShareFolder));
+        if (ImGui.Button("Open folder##share")) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ShareFolder) { UseShellExecute = true });
+        ImGui.EndDisabled();
+        EmberHUD.Ui.Text.Tip("Opens the share folder in Explorer");
 
         ImGui.SeparatorText("Import");
         ImGui.TextDisabled("Share folder: " + ShareFolder);
