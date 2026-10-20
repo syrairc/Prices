@@ -28,6 +28,7 @@ public sealed class Settings : PluginSettings
     public bool UseTitrack = true;
     public bool UseEtor = true;
     public bool UseLocal;
+    public int MinSamples;
     public PriceSource[] Priority = [PriceSource.Etor, PriceSource.Titrack, PriceSource.Local];
     [JsonIgnore] public string Status = "";
     [JsonIgnore] public string ContributeStatus = "";
@@ -173,5 +174,6 @@ public sealed class Settings : PluginSettings
             ImGui.TextUnformatted(source == PriceSource.Titrack ? "TITrack" : source.ToString());
             EmberHUD.Ui.Text.Tip(Tip(source));
         }, new ListOpts { ShowIndex = true })) Priority = [.. order];
+        Setting.Slider("Minimum samples", ref MinSamples, 0, 200, "Ignore a price that fewer than this many Exchange searches back, the next database in the list prices the item instead. 0 = keep everything. Only TITrack reports sample counts, ETor prices always stay");
     }
 }

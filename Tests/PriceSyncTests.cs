@@ -322,6 +322,28 @@ public sealed class PriceSyncTests
     }
 
     [Test]
+    public void MinimumSamplesFiltersWithoutDownloadingAgain()
+    {
+        const string Rows = """[{"config_base_id":1,"price_fe_median":5,"price_fe_p10":1,"price_fe_p90":9,"submission_count":3,"unique_devices":2,"updated_at":"2026-10-17T14:00:00+00:00"},{"config_base_id":2,"price_fe_median":6,"price_fe_p10":1,"price_fe_p90":9,"submission_count":40,"unique_devices":9,"updated_at":"2026-10-17T14:00:00+00:00"}]""";
+        var stub = new Stub(_ => Rows);
+        var plugin = Syncing(stub, new long[1]);
+        plugin.Settings.Season = 1601;
+        plugin.Tick();
+        plugin.Tick();
+        Check.Equal(2, plugin.Prices.Count);
+        var requests = stub.Urls.Count;
+        plugin.Settings.MinSamples = 10;
+        plugin.Tick();
+        Check.Equal(1, plugin.Prices.Count);
+        Check.That(plugin.Prices.ContainsKey(2), "the well backed price stays");
+        plugin.Settings.MinSamples = 0;
+        plugin.Tick();
+        Check.Equal(2, plugin.Prices.Count);
+        Check.Equal(requests, stub.Urls.Count);
+        Clean(plugin);
+    }
+
+    [Test]
     public void ChangingTheEnabledDatabasesRefreshesAtOnce()
     {
         var stub = new Stub(Reply);

@@ -117,11 +117,13 @@ public static class PriceSources
 {
     static string Name(PriceSource source) => source switch { PriceSource.Titrack => "TITrack", PriceSource.Etor => "ETor", _ => "Local" };
 
-    public static Dictionary<int, Price> Combine(IEnumerable<IReadOnlyDictionary<int, Price>> inPriorityOrder)
+    // a price with a known sample count under minSamples is skipped, so a lower database can still price the item - unknown counts (ETor) always pass
+    public static Dictionary<int, Price> Combine(IEnumerable<IReadOnlyDictionary<int, Price>> inPriorityOrder, int minSamples = 0)
     {
         var merged = new Dictionary<int, Price>();
         foreach (var table in inPriorityOrder)
-            foreach (var (id, price) in table) merged.TryAdd(id, price);
+            foreach (var (id, price) in table)
+                if (!(price.Submissions < minSamples)) merged.TryAdd(id, price);
         return merged;
     }
 

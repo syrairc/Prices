@@ -203,4 +203,18 @@ public sealed class SourcesTests
         Check.Equal(4f, rows[0].High ?? 0);
         Check.Equal(9, rows[1].BaseId);
     }
+
+    [Test]
+    public void CombineSkipsThinPricesSoALowerDatabaseCanPriceTheItem()
+    {
+        var titrack = new Dictionary<int, Price> { [1] = new(10, null, null, null, 2), [2] = new(20, null, null, null, 50), [3] = new(30, null, null, null, 1) };
+        var etor = new Dictionary<int, Price> { [1] = new(11, null, null), [4] = new(44, null, null) };
+        var merged = PriceSources.Combine([titrack, etor], 5);
+        Check.Equal(11f, merged[1].Median);
+        Check.Equal(20f, merged[2].Median);
+        Check.That(!merged.ContainsKey(3), "thin and nowhere else");
+        Check.Equal(44f, merged[4].Median);
+        Check.Equal(10f, PriceSources.Combine([titrack, etor])[1].Median);
+        Check.Equal(10f, PriceSources.Combine([titrack, etor], 2)[1].Median);
+    }
 }

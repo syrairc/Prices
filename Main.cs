@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Numerics;
 using System.Threading;
@@ -26,6 +27,8 @@ public sealed class Main : Plugin<Settings>
     (int, int?, string) _jobKey;
     (int, int?, string)? _fullKey;
     int? _heldSeason;
+    Synced? _synced;
+    int _builtMin;
     Contribution? _contribution;
     CancellationTokenSource? _stopContributing;
 
@@ -63,6 +66,7 @@ public sealed class Main : Plugin<Settings>
     {
         if (Settings.GroundEnabled) Game.WantGroundItems();
         Contribute();
+        if (_synced is not null && _builtMin != Settings.MinSamples) Prices = Build(_synced);
         if (Job.TakeFinished() is { } done)
         {
             var result = done.GetAwaiter().GetResult();
@@ -177,11 +181,19 @@ public sealed class Main : Plugin<Settings>
         return merged;
     }
 
+    IReadOnlyDictionary<int, Price> Build(Synced result)
+    {
+        _builtMin = Settings.MinSamples;
+        if (_builtMin <= 0 || result.Tables is not { } tables) return result.File!.Rows;
+        return PriceSources.Combine(Settings.Active.Where(tables.ContainsKey).Select(source => tables[source]), _builtMin);
+    }
+
     void Apply(Synced result, DateTime? at = null)
     {
-        if (result.File is { } file)
+        if (result.File is not null)
         {
-            Prices = file.Rows;
+            _synced = result;
+            Prices = Build(result);
             Settings.Tables = result.Tables ?? Settings.Tables;
             _heldSeason = result.Season;
         }

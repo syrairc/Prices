@@ -37,6 +37,7 @@
   "UseTitrack": true,
   "UseEtor": true,
   "UseLocal": false,
+  "MinSamples": 0,
   "Priority": [
     "Etor",
     "Titrack",
