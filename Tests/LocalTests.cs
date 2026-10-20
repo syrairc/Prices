@@ -52,11 +52,11 @@ public sealed class LocalTests
     {
         var book = new LocalBook();
         var affix = new TradeAffix(TradeAffixKind.Prefix, 5001, 2, [22f], "<p>+22(20-24) <e id=7>Strength</e></p>");
-        var other = new TradeAffix(TradeAffixKind.Prefix, 5001, 2, [23f], "something else");
+        var other = new TradeAffix(TradeAffixKind.Prefix, 5001, 3, [23f], "something else");
         book.Add([Good(1, 10, 5, affixes: [affix]), Good(2, 10, 6, affixes: [other])], Now);
         Check.Equal(1, book.AffixTexts.Count);
         Check.Equal("+22(20-24) Strength", book.AffixTexts[5001]);
-        Check.Equal(23f, book.Rows.Single(row => row.GoodId == 2).Affixes![0].Rolls![0]);
+        Check.Equal(new RowAffix(TradeAffixKind.Prefix, 5001, 3), book.Rows.Single(row => row.GoodId == 2).Affixes![0]);
     }
 
     [Test]
@@ -64,9 +64,9 @@ public sealed class LocalTests
     {
         var book = new LocalBook();
         book.Add([Good(1, 10, 5, affixes: [new TradeAffix(TradeAffixKind.Prefix, 7, 2, [55f], "<p>+55(46-55)</p>% Gear <e id=1>Physical</e> Damage"), new TradeAffix(TradeAffixKind.BaseAttribute, 8, 2, [154f, 160f], "<p>154</p> - <p>160</p> Physical Damage"), new TradeAffix(TradeAffixKind.Suffix, 9, 2, [-15f], "<p>-15(-15--14)</p>% additional Attack Damage")])], Now);
-        Check.Equal("+{0}(46-55)% Gear Physical Damage", book.AffixTexts[7]);
-        Check.Equal("{0} - {1} Physical Damage", book.AffixTexts[8]);
-        Check.Equal("{0}(-15--14)% additional Attack Damage", book.AffixTexts[9]);
+        Check.Equal("+#(46-55)% Gear Physical Damage", book.AffixTexts[7]);
+        Check.Equal("# - # Physical Damage", book.AffixTexts[8]);
+        Check.Equal("#(-15--14)% additional Attack Damage", book.AffixTexts[9]);
     }
 
     [Test]
@@ -117,7 +117,7 @@ public sealed class LocalTests
     {
         var directory = TempDirectory();
         var book = new LocalBook();
-        var affix = new TradeAffix(TradeAffixKind.Prefix, 5, 1, [3f, 4f], "<p>a</p>");
+        var affix = new TradeAffix(TradeAffixKind.Prefix, 5, 4, [3f, 4f], "<p>a</p>");
         book.Add([Good(1, 10, 100, 50, affixes: [affix]), Good(2, 10, 80, 40)], Now);
         book.Flush(directory, 1601);
         book.Add([Good(1, 10, 100, 50, "Sold"), Good(3, 11, 7, 7)], Now + 100);
@@ -132,7 +132,7 @@ public sealed class LocalTests
         var first = loaded.Rows.Single(row => row.GoodId == 1);
         Check.That(first.Sold, "update line applied");
         Check.Equal(Now + 100, first.LastSeen);
-        Check.Equal(4f, first.Affixes![0].Rolls![1]);
+        Check.Equal(new RowAffix(TradeAffixKind.Prefix, 5, 4), first.Affixes![0]);
         Check.Equal("a", loaded.AffixTexts[5]);
         Check.Equal(50, first.Quantity);
 

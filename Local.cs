@@ -9,7 +9,35 @@ using EmberHUD;
 
 namespace Prices;
 
-public readonly record struct RowAffix([property: JsonPropertyName("k")] TradeAffixKind Kind, [property: JsonPropertyName("i")] int Id, [property: JsonPropertyName("r")] float[]? Rolls);
+[JsonConverter(typeof(RowAffixConverter))]
+public readonly record struct RowAffix(TradeAffixKind Kind, int Id, int Tier);
+
+// [kind, id, tier] - tiers are kept, the rolled values are not, the tier range is in the shared text
+public sealed class RowAffixConverter : JsonConverter<RowAffix>
+{
+    public override RowAffix Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException();
+        reader.Read();
+        var kind = reader.GetInt32();
+        reader.Read();
+        var id = reader.GetInt32();
+        reader.Read();
+        var tier = reader.GetInt32();
+        reader.Read();
+        if (reader.TokenType != JsonTokenType.EndArray) throw new JsonException();
+        return new RowAffix((TradeAffixKind)kind, id, tier);
+    }
+
+    public override void Write(Utf8JsonWriter writer, RowAffix value, JsonSerializerOptions options)
+    {
+        writer.WriteStartArray();
+        writer.WriteNumberValue((int)value.Kind);
+        writer.WriteNumberValue(value.Id);
+        writer.WriteNumberValue(value.Tier);
+        writer.WriteEndArray();
+    }
+}
 
 public sealed class LocalRow
 {
@@ -59,12 +87,8 @@ public sealed class LocalBook
     static readonly Regex Markup = new("<[^>]*>");
     static readonly Regex Roll = new(@"<p>(\+?)(-?[\d.]+)(\([^)]*\))?</p>");
 
-    // the roll is stored per row, so the shared text keeps only the numbered slot and the tier range
-    static string Template(string text)
-    {
-        var slot = 0;
-        return Markup.Replace(Roll.Replace(text, match => $"{match.Groups[1].Value}{{{slot++}}}{match.Groups[3].Value}"), "").Trim();
-    }
+    // rolls are not kept, so the shared text shows # where the roll was and keeps the tier range
+    static string Template(string text) => Markup.Replace(Roll.Replace(text, match => $"{match.Groups[1].Value}#{match.Groups[3].Value}"), "").Trim();
 
     readonly Dictionary<long, LocalRow> _rows = [];
     readonly Dictionary<int, string> _affixes = [];
@@ -153,7 +177,7 @@ public sealed class LocalBook
             LastSeen = now,
             WrittenSeen = now,
             Sold = sold,
-            Affixes = good.Affixes.Length > 0 ? [.. good.Affixes.Select(affix => new RowAffix(affix.Kind, affix.Id, affix.Rolls))] : null,
+            Affixes = good.Affixes.Length > 0 ? [.. good.Affixes.Select(affix => new RowAffix(affix.Kind, affix.Id, affix.Tier))] : null,
             Flags = good.Flags.Length > 0 ? good.Flags : null,
             SkillId = good.SkillId,
             SkillType = good.SkillType,
