@@ -70,6 +70,23 @@ public sealed class LocalTests
     }
 
     [Test]
+    public void LegendariesKeepNoTiersAndVariantsDifferByModifiers()
+    {
+        var book = new LocalBook();
+        TradeGood Legendary(long id, bool corrode, params int[] affixIds) =>
+            Good(id, 4518, 10, stackMax: 1, affixes: [.. affixIds.Select(a => new TradeAffix(TradeAffixKind.Prefix, a, 1, [3f], "<p>5</p>"))]) with { SpecialId = 110103, Corrode = corrode };
+        book.Add([Legendary(1, false, 51210311, 51210321), Legendary(2, false, 51210321, 51210311), Legendary(3, false, 51210311, 51210321, 51210399), Legendary(4, true, 51210311, 51210321)], Now);
+        var rows = book.Rows.OrderBy(row => row.GoodId).ToList();
+        Check.That(rows.All(row => row.Affixes!.All(affix => affix.Tier == 0)), "no tiers on a legendary");
+        Check.Equal(rows[0].Variant, rows[1].Variant);
+        Check.That(rows[0].Variant != rows[2].Variant, "an extra modifier is its own variant");
+        Check.That(rows[0].Variant != rows[3].Variant, "a corroded one is its own variant");
+        var plain = new LocalBook();
+        plain.Add([Good(9, 10, 5)], Now);
+        Check.Equal("", plain.Rows.Single().Variant);
+    }
+
+    [Test]
     public void PricePickIgnoresTheOutlier()
     {
         var book = new LocalBook();

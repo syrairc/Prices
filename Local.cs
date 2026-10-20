@@ -12,7 +12,7 @@ namespace Prices;
 [JsonConverter(typeof(RowAffixConverter))]
 public readonly record struct RowAffix(TradeAffixKind Kind, int Id, int Tier);
 
-// [kind, id, tier] - tiers are kept, the rolled values are not, the tier range is in the shared text
+// [kind, id, tier] - tiers are kept (0 on a legendary, they have none), the rolled values are not, the tier range is in the shared text
 public sealed class RowAffixConverter : JsonConverter<RowAffix>
 {
     public override RowAffix Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -64,6 +64,9 @@ public sealed class LocalRow
     [JsonPropertyName("fo")] public bool Forged { get; set; }
     [JsonPropertyName("co")] public bool Corrode { get; set; }
     [JsonIgnore] public long WrittenSeen { get; set; }
+
+    // legendaries have no tiers: the same special id with a different set of modifiers (or corroded) is its own variant
+    [JsonIgnore] public string Variant => SpecialId == 0 ? "" : $"{SpecialId}:{string.Join(',', (Affixes ?? []).Select(affix => affix.Id).Order())}{(Corrode ? ":c" : "")}";
 }
 
 public sealed class LocalBook
@@ -177,7 +180,7 @@ public sealed class LocalBook
             LastSeen = now,
             WrittenSeen = now,
             Sold = sold,
-            Affixes = good.Affixes.Length > 0 ? [.. good.Affixes.Select(affix => new RowAffix(affix.Kind, affix.Id, affix.Tier))] : null,
+            Affixes = good.Affixes.Length > 0 ? [.. good.Affixes.Select(affix => new RowAffix(affix.Kind, affix.Id, good.SpecialId != 0 ? 0 : affix.Tier))] : null,
             Flags = good.Flags.Length > 0 ? good.Flags : null,
             SkillId = good.SkillId,
             SkillType = good.SkillType,
