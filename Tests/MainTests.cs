@@ -135,6 +135,18 @@ public sealed class MainTests
     }
 
     [Test]
+    public void BagTotalShowsTheOpenTabThenTheWholeInventory()
+    {
+        var plugin = Plugin();
+        plugin.Prices = new Dictionary<int, Price> { [1] = new(8, null, null), [2] = new(1, null, null) };
+        var gear = new InventoryItem(InventoryBag.Equipment, 0, "id", 2, 0, 0, 0, 5, 100, 0);
+        InventoryItem[] items = [Item(0, 1), gear];
+        Check.Equal("40 (45)", plugin.BagTotalText(items, Bag(3)));
+        Check.Equal("45", plugin.BagTotalText(items, null));
+        Check.Equal("40", plugin.BagTotalText([Item(0, 1)], Bag(3)), "one tab only, no bracket");
+    }
+
+    [Test]
     public void RemembersEveryStashTabOpened()
     {
         var plugin = Plugin(totals: true);
