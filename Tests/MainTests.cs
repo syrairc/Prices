@@ -147,7 +147,44 @@ public sealed class MainTests
         Check.Equal(0, Vertices(plugin, BoothState(3)));
     }
 
-    static readonly GameUi OpenWithSort =new([new GamePanel("Bag", PanelKind.Inventory, default, new Vector2(900, 600), false) { Parts = [new NamedRect("UIButton_Arrage", new Vector2(700, 20), new Vector2(780, 60))] }]);
+    [Test]
+    public void BoothFallsThroughToTheBagWhenNoBoothViewIsRead()
+    {
+        var plugin = Plugin(totals: true);
+        var both = new GameUi([.. BoothOnly.Panels, .. OpenWithSort.Panels]);
+        var bag = State(3, Item(0, 1), Item(1, 1)) with { Ui = OpenWithSort };
+        Check.That(Vertices(plugin, bag) > 0, "bag tags and total draw");
+        Check.Equal(Vertices(plugin, bag), Vertices(plugin, bag with { Ui = both, Booth = null }));
+    }
+
+    [Test]
+    public void BoothTotalNeedsTheStashButtonButTagsDoNot()
+    {
+        var plugin = Plugin(totals: true);
+        var tagsOnly = Vertices(Plugin(), BoothState(3, Item(0, 1)));
+        Check.That(tagsOnly > 0, "tags draw");
+        Check.Equal(tagsOnly, Vertices(plugin, BoothState(3, Item(0, 1))));
+        Check.That(Vertices(plugin, BoothState(3, Item(0, 1)) with { Ui = BoothWithStash }) > tagsOnly, "total adds vertices");
+    }
+
+    [Test]
+    public void BoothTagsStayInsideTheClip()
+    {
+        var plugin = Plugin();
+        var items = new[] { Item(0, 1), Item(2, 1) };
+        var wide = Vertices(plugin, BoothState(3, items));
+        var narrow = Vertices(plugin, BoothState(3, items) with { Booth = Bag(3) with { ClipMax = new Vector2(150, 600) } });
+        Check.That(narrow < wide, "cell outside the clip draws nothing");
+    }
+
+    [Test]
+    public void BoothWithoutInventoryDrawsNothingEvenWithTotals()
+    {
+        var plugin = Plugin(totals: true);
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1)) with { Ui = BoothWithStash, Inventory = null }));
+    }
+
+    static readonly GameUi OpenWithSort = new([new GamePanel("Bag", PanelKind.Inventory, default, new Vector2(900, 600), false) { Parts = [new NamedRect("UIButton_Arrage", new Vector2(700, 20), new Vector2(780, 60))] }]);
 
     [Test]
     public void InventoryTotalSitsLeftOfTheSortButton()

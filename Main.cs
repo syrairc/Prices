@@ -626,12 +626,12 @@ public sealed class Main : Plugin<Settings>
         var state = Game.State;
         if (state.Stash is { } shown && state.StashItems is { } shownItems) _stashTabs[shown.Tab] = shownItems;
         var booth = BoothOpen(state.Ui);
-        if (!Settings.ShowTotals || !(booth || OpenKind(state.Ui) is not null)) return;
+        if (!Settings.ShowTotals || (!booth && OpenKind(state.Ui) is null)) return;
         Game.WantInventory();
         var icon = TagIcon(out var hasIcon);
-        if (booth)
+        if (booth && state.Booth is { } view && state.Inventory is { } stock)
         {
-            if (state.Booth is { } view && state.Inventory is { } stock && FindPart(state.Ui, p => p.Name == BoothPanel, StashPart) is { } stashButton)
+            if (FindPart(state.Ui, p => p.Name == BoothPanel, StashPart) is { } stashButton)
                 DrawTag(BagTotalText(stock, view), icon, hasIcon, size => new Vector2(stashButton.Min.X - SortGap - size.X, (stashButton.Min.Y + stashButton.Max.Y - size.Y) / 2));
             return;
         }
@@ -699,8 +699,10 @@ public sealed class Main : Plugin<Settings>
         {
             Game.WantInventory();
             if (state.Booth is { } booth && state.Inventory is { } stock)
+            {
                 DrawTags(stock, booth.ClipMin, booth.ClipMax, booth.Cells, item => item.Bag == booth.Tab);
-            return;
+                return;
+            }
         }
         var kind = OpenKind(state.Ui);
         if (kind is null) return;
