@@ -10,7 +10,7 @@ public sealed record Point(DateTimeOffset At, float Bags, float Stash, float Tot
 
 public sealed record StashTab(int Index, DateTimeOffset SeenAt, Line[] Lines);
 
-public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, double[][]> PriceHistory, Dictionary<int, string> Names);
+public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, double[][]> PriceHistory, Dictionary<int, string> Names, Snapshot? Open = null);
 
 public sealed class WealthStore
 {
@@ -55,6 +55,8 @@ public sealed class WealthStore
         if (!float.IsFinite(run.StartTotal) || !float.IsFinite(run.EndTotal) || !Finite(run.Loot) || !Finite(run.Costs)) return;
         Data = Data with { Runs = Data.Runs.Append(run).TakeLast(MaxRuns).ToArray() };
     }
+
+    public void SetOpen(Snapshot? open) => Data = Data with { Open = open };
 
     public void SetTab(StashTab tab)
     {

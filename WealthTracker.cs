@@ -72,6 +72,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         var snapshot = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
         store.AddSnapshot(snapshot, stored is null ? [] : [stored], Names(snapshot, store));
         if (runs.OnSnapshot(snapshot, prices) is { } run) store.AddRun(run);
+        store.SetOpen(runs.Open);
         (Last, lastArea, lastSnapshotAt) = (snapshot, (state.AreaId, area.Name), at);
         return true;
     }
