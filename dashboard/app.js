@@ -97,7 +97,7 @@
         if (stop) return;
         setIndex(window.WEALTH_INDEX || []);
         if (!key) return;
-        await load('wealth-' + key + '.js');
+        await load('wealth-' + encodeURIComponent(key) + '.js');
         const next = window.WEALTH && window.WEALTH[key];
         if (stop || !next) return;
         const signature = JSON.stringify(next);
@@ -302,13 +302,14 @@
     const [details, setDetails] = useState(null);
     const [report, setReport] = useState(false);
     const runs = data.runs || [];
+    const stash = (data.tabs || []).reduce((a, tab) => a + tab.lines.reduce((b, l) => b + l.value, 0), 0);
     const summary = useMemo(() => M.summarise(runs, eco, now), [runs, eco, eco.wallClock ? now : 0]);
     const cumulative = useMemo(() => M.cumulative(runs, eco), [runs, eco]);
     const rolling = useMemo(() => M.rolling(runs, eco, 10), [runs, eco]);
     return html`
       <div>
         <div className="tiles">
-          <${Tile} label="Net Worth" value=${data.bag ? num(data.bag.total, 0) + ' FE' : '-'} sub=${'runs ' + signed(summary.netWorth)} />
+          <${Tile} label="Net Worth" value=${data.bag ? num(data.bag.total + stash, 0) + ' FE' : '-'} sub=${'bags ' + (data.bag ? num(data.bag.total, 0) : '0') + ' + stash ' + num(stash, 0)} />
           <${Tile} label="FE / Hour" value=${num(summary.fePerHour)} tint=${tone(summary.fePerHour)} />
           <${Tile} label="FE / Map" value=${num(summary.fePerMap)} tint=${tone(summary.fePerMap)} />
           <${Tile} label="Runs" value=${summary.runs} />
@@ -378,7 +379,7 @@
         ${index.length === 0 && html`<div className="empty big">No data yet. Start the game with the Prices plugin on and it appears here.</div>`}
         ${index.length > 0 && !data && html`<div className="empty big">Loading...</div>`}
         ${data && screen === 'runs' && html`<${RunsScreen} data=${data} eco=${eco} setEco=${setEco} now=${now} stale=${stale} />`}
-        ${data && screen === 'wealth' && (Wealth ? html`<${Wealth} data=${data} profile=${key} now=${now} ui=${{ NameCell, Tile, num, stored, store }} />` : html`<div className="empty big">Wealth screen is not installed yet.</div>`)}
+        ${data && screen === 'wealth' && (Wealth ? html`<${Wealth} key=${key} data=${data} profile=${key} now=${now} ui=${{ NameCell, Tile, num, stored, store }} />` : html`<div className="empty big">Wealth screen is not installed yet.</div>`)}
         ${gear && html`<${Options} eco=${eco} setEco=${setEco} onClose=${() => setGear(false)} />`}
       </div>`;
   }

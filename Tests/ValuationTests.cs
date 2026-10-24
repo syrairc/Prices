@@ -63,8 +63,7 @@ public sealed class ValuationTests
     [Test]
     public void DiffIsSignedAndSkipsUnchanged()
     {
-        var prices = new Dictionary<int, Price> { [1] = new Price(10, null, null), [3] = new Price(4, null, null) };
-        var diff = Valuation.Diff(Lines((1, 5), (2, 2)), Lines((1, 3), (2, 2), (3, 1)), prices);
+        var diff = Valuation.Diff([new Line(1, 5, 10, 50), new Line(2, 2, 0, 0)], [new Line(1, 3, 10, 30), new Line(2, 2, 0, 0), new Line(3, 1, 4, 4)]);
         Check.Equal(2, diff.Length);
         var a = diff.Single(line => line.BaseId == 1);
         Check.Equal(-2, a.Count);
@@ -72,5 +71,14 @@ public sealed class ValuationTests
         var c = diff.Single(line => line.BaseId == 3);
         Check.Equal(1, c.Count);
         Check.Equal(4f, c.Value);
+    }
+
+    [Test]
+    public void DiffUsesTheLineUnitSoGearStaysAtLow()
+    {
+        var gear = Value([Item(1, 1, InventoryBag.Equipment)], new() { [1] = new Price(8, 3, 12) });
+        var diff = Valuation.Diff([], gear.Lines).Single();
+        Check.Equal(3f, diff.Value);
+        Check.Equal(100f, Valuation.Diff([], [new Line(Valuation.FeBaseId, 100, 0, 100)]).Single().Value);
     }
 }

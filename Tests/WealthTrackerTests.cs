@@ -273,6 +273,57 @@ public sealed class WealthTrackerTests
     }
 
     [Test]
+    public void StashingInTownIsNotAMapCost()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 5), Item(2, 1, 1)]));
+        clock.Advance(2);
+        Tick(tracker, Town([Item(2, 1, 1)]));
+        clock.Advance(2);
+        Tick(tracker, Map([Item(2, 1, 1)]));
+        clock.Advance(60);
+        Tick(tracker, Town([Item(2, 1, 1)]));
+        Check.Equal(0, tracker.Store!.Data.Runs.Single().Costs.Length);
+    }
+
+    [Test]
+    public void ConsumedCompassBeforeTheMapStillCosts()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 5), Item(2, 1, 1)]));
+        clock.Advance(2);
+        Tick(tracker, Town([Item(1, 5), Item(2, 1, 1)]));
+        clock.Advance(2);
+        Tick(tracker, Map([Item(2, 1, 1)]));
+        clock.Advance(60);
+        Tick(tracker, Town([Item(2, 1, 1)]));
+        var cost = tracker.Store!.Data.Runs.Single().Costs.Single();
+        Check.Equal(1, cost.BaseId);
+        Check.Equal(-5, cost.Count);
+    }
+
+    [Test]
+    public void SwitchingBackReusesTheRetiredStore()
+    {
+        var opened = 0;
+        var (tracker, clock) = Make();
+        tracker.Open = _ =>
+        {
+            opened++;
+            return new WealthStore();
+        };
+        Tick(tracker, Map([Item(1, 1)]), character: "Hero");
+        var hero = tracker.Store;
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]), character: "Other");
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]), character: "Hero");
+        Check.That(ReferenceEquals(hero, tracker.Store), "same store");
+        Check.Equal(2, opened);
+        Check.Equal(1, tracker.Retired.Length);
+    }
+
+    [Test]
     public void OpenRunFollowsTheMap()
     {
         var (tracker, clock) = Make();

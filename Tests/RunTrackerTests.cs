@@ -12,7 +12,7 @@ public sealed class RunTrackerTests
     static readonly Dictionary<int, Price> Prices = new() { [1] = new Price(10, null, null), [2] = new Price(4, null, null), [3] = new Price(2, null, null) };
 
     static Line[] Lines(params (int BaseId, int Count)[] counts) =>
-        counts.Select(c => new Line(c.BaseId, c.Count, 0, 0)).ToArray();
+        counts.Select(c => new Line(c.BaseId, c.Count, Prices.TryGetValue(c.BaseId, out var p) ? p.Median : 0, c.Count * (Prices.TryGetValue(c.BaseId, out var q) ? q.Median : 0))).ToArray();
 
     static Snapshot Town(double seconds = 0, float total = 0, params (int BaseId, int Count)[] lines) =>
         new(T0.AddSeconds(seconds), 1, "Town", true, total, 0, 0, Lines(lines));
@@ -141,7 +141,27 @@ public sealed class RunTrackerTests
         var tracker = new RunTracker();
         tracker.OnSnapshot(Town(), Prices);
         tracker.OnSnapshot(Map(0), Prices);
-        Check.That(tracker.OnSnapshot(new Snapshot(T0.AddSeconds(60), 1, "Town", true, 0, 0, 2, []), Prices)!.Unpriced);
+        Check.That(!tracker.OnSnapshot(Town(60, 0), Prices)!.Unpriced, "an unpriced bag item that did not change is not the run's problem");
+    }
+
+    [Test]
+    public void LootWithAnUnpricedLineFlagsTheRun()
+    {
+        var tracker = new RunTracker();
+        tracker.OnSnapshot(Town(), Prices);
+        tracker.OnSnapshot(Map(0), Prices);
+        Check.That(tracker.OnSnapshot(Town(60, 0, (99, 1)), Prices)!.Unpriced);
+    }
+
+    [Test]
+    public void BaselineMovesOnlyInTown()
+    {
+        var tracker = new RunTracker();
+        tracker.OnSnapshot(Town(0, 0, (1, 5)), Prices);
+        tracker.Baseline(Town(2));
+        tracker.OnSnapshot(Map(5, 0, lines: [(2, 1)]), Prices);
+        tracker.Baseline(Town(6, 0, (1, 9)));
+        Check.Equal(0, tracker.OnSnapshot(Town(60), Prices)!.Costs.Length);
     }
 
     [Test]

@@ -133,7 +133,7 @@ public sealed class DashboardTests
             var after = (profile.Live ?? profile.Bag)!.Lines;
             var prices = new Dictionary<int, Price>();
             foreach (var line in profile.Open!.Lines.Concat(after)) prices[line.BaseId] = new Price(line.Unit, null, null);
-            var expectedDiff = Valuation.Diff(profile.Open.Lines, after, prices).OrderBy(l => l.BaseId).ToArray();
+            var expectedDiff = Valuation.Diff(profile.Open.Lines, after).OrderBy(l => l.BaseId).ToArray();
             var diff = result.GetProperty("diff").EnumerateArray().OrderBy(e => e.GetProperty("baseId").GetInt32()).ToArray();
             Check.Equal(expectedDiff.Length, diff.Length);
             for (var i = 0; i < diff.Length; i++)

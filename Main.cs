@@ -113,8 +113,19 @@ public sealed class Main : Plugin<Settings>
 
     public override void Tick()
     {
+        try
+        {
+            TickPrices();
+        }
+        finally
+        {
+            TrackWealth();
+        }
+    }
+
+    void TickPrices()
+    {
         if (Settings.GroundEnabled) Game.WantGroundItems();
-        TrackWealth();
         Contribute();
         CollectLocal();
         if (_rebuild || ((_synced is not null || _local is not null) && _builtKey != BuildKey))
@@ -187,7 +198,7 @@ public sealed class Main : Plugin<Settings>
             if (current is not null && key is not null) current.Save(directory, key);
             _wealthError = "";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
             _wealthError = "save failed: " + ex.Message;
             _wealthDirty = true;

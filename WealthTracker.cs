@@ -13,7 +13,10 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     IReadOnlyDictionary<int, Price> prices = new Dictionary<int, Price>();
     (int AreaId, string Name)? lastArea;
     DateTimeOffset lastSnapshotAt;
+    static readonly TimeSpan LiveEvery = TimeSpan.FromSeconds(1);
+
     Line[]? lastLive;
+    DateTimeOffset lastLiveAt;
     int? lastTab;
     DateTimeOffset lastTabAt;
 
@@ -43,8 +46,14 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     }
 
     public Run? CurrentRun => runs.Open is { } open && Last is { } last
-        ? new Run(open.At, last.At, open.AreaName, open.Total, last.Total, runs.Before is null, last.Unpriced > 0, Valuation.Diff(open.Lines, last.Lines, prices), [])
+        ? CurrentOf(open, last)
         : null;
+
+    Run CurrentOf(Snapshot open, Snapshot last)
+    {
+        var loot = Valuation.Diff(open.Lines, last.Lines);
+        return new Run(open.At, last.At, open.AreaName, open.Total, last.Total, runs.Before is null, Valuation.AnyUnpriced(loot), loot, []);
+    }
 
     public bool Tick(GameState state, IReadOnlyDictionary<int, Price> current, int? season, int snapshotMinutes, string? character)
     {
@@ -71,11 +80,17 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         var due = lastArea != (state.AreaId, area.Name) || at - lastSnapshotAt >= TimeSpan.FromMinutes(Math.Max(1, snapshotMinutes));
         if (!due)
         {
-            if (runs.Open is null) return added;
+            if (at - lastLiveAt < LiveEvery) return added;
+            lastLiveAt = at;
             var live = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
             if (lastLive is not null && live.Lines.SequenceEqual(lastLive)) return added;
-            store.SetLive(live);
             lastLive = live.Lines;
+            if (runs.Open is null)
+            {
+                if (area.IsTown) runs.Baseline(live);
+                return added;
+            }
+            store.SetLive(live);
             return true;
         }
         var snapshot = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
@@ -98,7 +113,17 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     {
         if (Key is { } old && Store is { } oldStore)
             lock (retired) retired.Add((old, oldStore));
-        (Key, Store) = (key, Open(key));
+        WealthStore? back = null;
+        lock (retired)
+        {
+            var again = retired.FindIndex(item => item.Key == key);
+            if (again >= 0)
+            {
+                back = retired[again].Store;
+                retired.RemoveAt(again);
+            }
+        }
+        (Key, Store) = (key, back ?? Open(key));
         runs.Reset();
         (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
     }

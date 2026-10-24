@@ -37,6 +37,12 @@ public sealed class RunTracker
         return closed;
     }
 
+    public void Baseline(Snapshot s)
+    {
+        if (!s.InTown || Open is not null) return;
+        Before = last = s;
+    }
+
     public void Reset()
     {
         Open = null;
@@ -49,8 +55,9 @@ public sealed class RunTracker
         if (end.At - open.At < MinRun) return null;
         var partial = Before is null;
         var costs = Before is { InTown: true } before
-            ? Valuation.Diff(before.Lines, open.Lines, prices).Where(line => line.Count < 0).ToArray()
+            ? Valuation.Diff(before.Lines, open.Lines).Where(line => line.Count < 0).ToArray()
             : [];
-        return new Run(open.At, end.At, open.AreaName, open.Total, end.Total, partial, end.Unpriced > 0, Valuation.Diff(open.Lines, end.Lines, prices), costs);
+        var loot = Valuation.Diff(open.Lines, end.Lines);
+        return new Run(open.At, end.At, open.AreaName, open.Total, end.Total, partial, Valuation.AnyUnpriced(loot) || Valuation.AnyUnpriced(costs), loot, costs);
     }
 }

@@ -20,7 +20,7 @@ public sealed partial class Settings
     {
         ImGui.SeparatorText("Wealth");
         Setting.Checkbox("Track wealth", ref TrackWealth, "Records the FE value of your bags (and every stash tab you open) and the loot of every map run to files next to the price data, for the local dashboard. Needs Show prices on");
-        Setting.Slider("Snapshot every (minutes)", ref SnapshotMinutes, 1, 60, "How often the bag value is recorded while you stay in one area. Entering or leaving an area always records one");
+        Setting.Slider("Snapshot every (minutes)", ref SnapshotMinutes, 1, 10, "How often the bag value is recorded while you stay in one area. Entering or leaving an area always records one");
         Setting.Checkbox("Pause", ref WealthPaused, "Stop recording without losing anything already saved");
         if (WealthStatus is { } status)
             foreach (var line in status()) ImGui.TextDisabled(line);

@@ -22,20 +22,28 @@ public static class Valuation
         return new Snapshot(at, areaId, areaName, inTown, lines.Sum(line => line.Value), fe, unpriced, lines);
     }
 
-    public static Line[] Diff(Line[] before, Line[] after, IReadOnlyDictionary<int, Price> prices)
+    public static Line[] Diff(Line[] before, Line[] after)
     {
         var counts = new Dictionary<int, int>();
-        foreach (var line in after) counts[line.BaseId] = counts.GetValueOrDefault(line.BaseId) + line.Count;
-        foreach (var line in before) counts[line.BaseId] = counts.GetValueOrDefault(line.BaseId) - line.Count;
+        var units = new Dictionary<int, float>();
+        foreach (var line in before)
+        {
+            counts[line.BaseId] = counts.GetValueOrDefault(line.BaseId) - line.Count;
+            units[line.BaseId] = line.Unit;
+        }
+        foreach (var line in after)
+        {
+            counts[line.BaseId] = counts.GetValueOrDefault(line.BaseId) + line.Count;
+            units[line.BaseId] = line.Unit;
+        }
         return counts.Where(pair => pair.Value != 0).Select(pair =>
         {
-            var unit = UnitPrice(pair.Key, prices);
+            var unit = pair.Key == FeBaseId ? 1f : units[pair.Key];
             return new Line(pair.Key, pair.Value, unit, pair.Value * unit);
         }).ToArray();
     }
 
-    static float UnitPrice(int baseId, IReadOnlyDictionary<int, Price> prices) =>
-        baseId == FeBaseId ? 1f : prices.TryGetValue(baseId, out var price) ? price.Median : 0f;
+    public static bool AnyUnpriced(IEnumerable<Line> lines) => lines.Any(line => line.BaseId != FeBaseId && line.Unit == 0);
 
     static float Worth(InventoryItem item, IReadOnlyDictionary<int, Price> prices)
     {
