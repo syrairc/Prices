@@ -267,11 +267,11 @@ public sealed class Main : Plugin<Settings>
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(icons, "Items", "index.json")));
-            if (doc.RootElement.TryGetProperty("icons", out var entries))
+            if (doc.RootElement is { ValueKind: System.Text.Json.JsonValueKind.Object } root && root.TryGetProperty("icons", out var entries) && entries.ValueKind == System.Text.Json.JsonValueKind.Object)
                 foreach (var entry in entries.EnumerateObject())
-                    if (entry.Value.TryGetProperty("file", out var file) && file.GetString() is { Length: > 0 } name) files[entry.Name] = name;
+                    if (entry.Value is { ValueKind: System.Text.Json.JsonValueKind.Object } value && value.TryGetProperty("file", out var file) && file.ValueKind == System.Text.Json.JsonValueKind.String && file.GetString() is { Length: > 0 } name) files[entry.Name] = name;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
         {
             files.Clear();
         }

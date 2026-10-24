@@ -45,8 +45,7 @@
     const dir = window.WEALTH_ICON_DIR;
     const icon = data.icons && data.icons[id];
     if (!dir || !icon) return null;
-    const index = window.WEALTH_ICON_INDEX && window.WEALTH_ICON_INDEX.icons && window.WEALTH_ICON_INDEX.icons[icon];
-    const file = index ? index.file : icon + '.png';
+    const file = (window.WEALTH_ICON_INDEX || {})[icon] || icon + '.png';
     const parts = dir.replace(/\\/g, '/').split('/').map((part, i) => (i === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)));
     return 'file:///' + parts.join('/') + '/Items/' + encodeURIComponent(file);
   }
@@ -360,7 +359,8 @@
       setter(value);
       store(name, value);
     };
-    const stale = data && data.bag && now - Date.parse(data.bag.at) > STALE_MS;
+    const seen = data && data.bag ? Math.max(Date.parse(data.bag.at), data.live ? Date.parse(data.live.at) : 0) : 0;
+    const stale = seen > 0 && now - seen > STALE_MS;
     const Wealth = window.WealthScreen;
     return html`
       <div className="app">
@@ -374,7 +374,7 @@
           </select>
           <button className="btn" onClick=${() => setGear(true)}>Options</button>
         </header>
-        ${stale && html`<div className="banner">No new snapshot for ${clock((now - Date.parse(data.bag.at)) / 1000)} - tracking is paused or the game is closed.</div>`}
+        ${stale && html`<div className="banner">No new snapshot for ${clock((now - seen) / 1000)} - tracking is paused or the game is closed.</div>`}
         ${index.length === 0 && html`<div className="empty big">No data yet. Start the game with the Prices plugin on and it appears here.</div>`}
         ${index.length > 0 && !data && html`<div className="empty big">Loading...</div>`}
         ${data && screen === 'runs' && html`<${RunsScreen} data=${data} eco=${eco} setEco=${setEco} now=${now} stale=${stale} />`}

@@ -194,4 +194,68 @@ public sealed class DashboardTests
             if (Directory.Exists(directory)) Directory.Delete(directory, true);
         }
     }
+
+    [Test]
+    public void GarbageShapedIconIndexGivesAnEmptyMap()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "prices-icons-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(directory, "Items"));
+            foreach (var text in new[] { "[]", "1", "null", """{"icons":[]}""", """{"icons":5}""", """{"icons":{"A":1,"B":{"file":3},"C":[]}}""" })
+            {
+                File.WriteAllText(Path.Combine(directory, "Items", "index.json"), text);
+                Check.That(Main.IconScript(directory).Contains("WEALTH_ICON_INDEX = {}"), text);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void IconLookupShapeMatchesTheScript()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "prices-icons-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(directory, "Items"));
+            File.WriteAllText(Path.Combine(directory, "Items", "index.json"), """{"icons":{"UI_One":{"file":"One #1.png","pak":"x"}}}""");
+            File.WriteAllText(Path.Combine(directory, "icons.js"), Main.IconScript(directory));
+            var app = Text("app.js");
+            var start = app.IndexOf("function iconSrc", StringComparison.Ordinal);
+            var end = app.IndexOf("\n  }", start, StringComparison.Ordinal);
+            File.WriteAllText(Path.Combine(directory, "fn.js"), app[start..(end + 4)]);
+            var script = "const fs=require('fs');const w={};new Function('window',fs.readFileSync(process.argv[1],'utf8'))(w);" +
+                "const iconSrc=new Function('window',fs.readFileSync(process.argv[2],'utf8')+';return iconSrc;')(w);" +
+                "console.log(JSON.stringify([iconSrc({icons:{1:'UI_One',2:'UI_Two'}},1),iconSrc({icons:{1:'UI_One',2:'UI_Two'}},2),iconSrc({},3)]));";
+            var info = new ProcessStartInfo("node") { RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, UseShellExecute = false };
+            foreach (var arg in new[] { "-e", script, Path.Combine(directory, "icons.js"), Path.Combine(directory, "fn.js") }) info.ArgumentList.Add(arg);
+            string output;
+            var errors = new System.Text.StringBuilder();
+            try
+            {
+                using var process = Process.Start(info)!;
+                process.ErrorDataReceived += (_, e) => errors.AppendLine(e.Data);
+                process.BeginErrorReadLine();
+                output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                Check.Equal(0, process.ExitCode, errors.ToString());
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Console.WriteLine("IconLookupShapeMatchesTheScript skipped: node not found");
+                return;
+            }
+            var urls = JsonDocument.Parse(output).RootElement.EnumerateArray().Select(e => e.GetString()).ToArray();
+            Check.That(urls[0]!.EndsWith("/Items/One%20%231.png"), urls[0]);
+            Check.That(urls[1]!.EndsWith("/Items/UI_Two.png"), urls[1]);
+            Check.That(urls[2] is null);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
 }
