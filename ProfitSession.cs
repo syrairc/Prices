@@ -65,7 +65,8 @@ public static class ProfitText
         var star = unpriced ? "*" : "";
         var size = Math.Abs(number);
         if (Tags.Format(size) is not { } text) return "0" + star;
-        if (size < 100 && size.ToString("0.0", CultureInfo.InvariantCulture) is var tenths && tenths != "100.0") text = size >= 10 ? tenths.Replace(".0", "") : tenths;
+        var tenths = size.ToString("0.0", CultureInfo.InvariantCulture);
+        if (size < 100 && tenths != "100.0") text = size >= 10 ? tenths.Replace(".0", "") : tenths;
         return (number < 0 ? "-" : "+") + text + star;
     }
 

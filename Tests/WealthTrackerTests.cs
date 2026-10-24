@@ -202,6 +202,34 @@ public sealed class WealthTrackerTests
     }
 
     [Test]
+    public void ResetWithOpenRunIsNotCountedWhenItCloses()
+    {
+        var clock = new Clock();
+        var tracker = new WealthTracker(() => clock.At);
+        Tick(tracker, Town([Item(1, 1)]));
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(30);
+        tracker.Reset();
+        clock.Advance(30);
+        Tick(tracker, Town([Item(1, 3)]));
+        Check.Equal(0, SessionRuns(tracker));
+    }
+
+    [Test]
+    public void KeyChangeWithOpenRunIsNotCountedWhenItCloses()
+    {
+        var clock = new Clock();
+        var tracker = new WealthTracker(() => clock.At);
+        Tick(tracker, Town([Item(1, 1)]));
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(30);
+        Tick(tracker, Town([Item(1, 3)]), character: "Other");
+        Check.Equal(0, SessionRuns(tracker));
+    }
+
+    [Test]
     public void KeyChangeRestartsTheSession()
     {
         var clock = new Clock();
