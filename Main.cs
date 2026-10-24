@@ -49,6 +49,9 @@ public sealed class Main : Plugin<Settings>
     readonly Dictionary<int, InventoryItem[]> _stashTabs = [];
     readonly Overlay _overlay = new();
     readonly CompareCache _compare = new();
+    readonly ProfitOverlay _profit = new();
+    ProfitView? _profitView;
+    long _nextProfitAt;
     int _unusedWidth, _unusedHeight;
     WealthTracker? _wealth;
     volatile bool _wealthDirty;
@@ -567,6 +570,18 @@ public sealed class Main : Plugin<Settings>
         DrawTotals();
         DrawGround();
         DrawCompare();
+        DrawProfit();
+    }
+
+    void DrawProfit()
+    {
+        if (!(Settings.Enabled && Settings.TrackWealth && !Settings.WealthPaused && (Settings.ProfitFull || Settings.ProfitCompact))) return;
+        if (Clock() >= _nextProfitAt)
+        {
+            _nextProfitAt = Clock() + 250;
+            _profitView = Wealth.Session.View(Wealth.CurrentRun, Wealth.Last, Wealth.Store?.Data.Tabs ?? []);
+        }
+        _profit.Draw(Settings, _profitView, TagIcon(out var hasIcon, Settings.ProfitIcon), hasIcon);
     }
 
     internal static string CompareLabel(float value) =>
@@ -708,10 +723,10 @@ public sealed class Main : Plugin<Settings>
         }
     }
 
-    Sprite TagIcon(out bool hasIcon)
+    Sprite TagIcon(out bool hasIcon, bool? wanted = null)
     {
         Sprite icon = default;
-        hasIcon = Settings.ShowIcon && Draw.TryGameIcon(FeIcon, out icon);
+        hasIcon = (wanted ?? Settings.ShowIcon) && Draw.TryGameIcon(FeIcon, out icon);
         return icon;
     }
 

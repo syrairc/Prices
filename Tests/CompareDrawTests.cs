@@ -22,7 +22,12 @@ public sealed class CompareDrawTests
         Compare = rows.Length == 0 ? null : new EquipCompare(rows),
     };
 
-    static Main Plugin(Vector2 mouse) => new() { Cursor = () => mouse };
+    static Main Plugin(Vector2 mouse)
+    {
+        var plugin = new Main { Cursor = () => mouse };
+        plugin.Settings.ProfitFull = false;
+        return plugin;
+    }
 
     static List<(Vector2 Pos, uint Rgb)> Render(Main plugin, GameState state, long now)
     {

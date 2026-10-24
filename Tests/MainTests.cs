@@ -24,6 +24,7 @@ public sealed class MainTests
     {
         var plugin = new Main { Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
         plugin.Settings.ShowTotals = totals;
+        plugin.Settings.ProfitFull = false;
         return plugin;
     }
 
