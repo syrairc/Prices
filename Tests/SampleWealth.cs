@@ -44,7 +44,7 @@ public static class SampleWealth
     {
         var args = Environment.GetCommandLineArgs();
         var at = Array.IndexOf(args, "--plugins");
-        var plugins = at >= 0 && at + 1 < args.Length ? Path.GetFullPath(args[at + 1], AppContext.BaseDirectory) : Path.Combine(AppContext.BaseDirectory, "Plugins");
+        var plugins = at >= 0 && at + 1 < args.Length ? Path.GetFullPath(args[at + 1], AppContext.BaseDirectory) : Environment.GetEnvironmentVariable("EMBER_PLUGINS") ?? Path.Combine(AppContext.BaseDirectory, "Plugins");
         return Path.Combine(plugins, "Prices", "dashboard");
     }
 
