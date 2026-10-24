@@ -46,7 +46,7 @@ public sealed class PriceSyncTests
         return sb.Append(']').ToString();
     }
 
-    static string Reply(HttpRequestMessage request) => request.RequestUri!.AbsolutePath.EndsWith("get_available_seasons") ? Seasons : Page(1, 2);
+    static string Reply(HttpRequestMessage request) => request.RequestUri!.AbsolutePath.EndsWith("get_available_seasons") ? Seasons.Replace("2026-10-17T15:40", DateTime.UtcNow.AddHours(-1).ToString("yyyy-MM-ddTHH:mm")) : Page(1, 2);
 
     static Main Syncing(Stub stub, long[]? clock = null)
     {
