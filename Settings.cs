@@ -223,7 +223,7 @@ public sealed partial class Settings : PluginSettings
     string _seasonText = "";
     bool _seasonEditing;
 
-    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Sources", DrawSources), ("Ground Items", DrawGround), ("Totals", DrawTotals), ("Compare", DrawCompare), ("Wealth", DrawWealth), ("Database", DrawDatabase), ("Share", DrawShare));
+    public override void Draw() => Layout.TabBar("prices", ("Prices", DrawPrices), ("Sources", DrawSources), ("Ground Items", DrawGround), ("Totals", DrawTotals), ("Compare", DrawCompare), ("Wealth", DrawWealth), ("Overlay", DrawOverlay), ("Database", DrawDatabase), ("Share", DrawShare));
 
     internal void DrawTotals()
     {

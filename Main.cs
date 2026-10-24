@@ -106,6 +106,7 @@ public sealed class Main : Plugin<Settings>
         Settings.PurgeLocal = PurgeNow;
         (Settings.ShareFolder, Settings.ExportShare, Settings.ImportShare) = (ShareDirectory, ExportShare, ImportShare);
         (Settings.WealthStatus, Settings.WealthReset, Settings.WealthOpen) = (WealthStatus, Wealth.Reset, OpenDashboard);
+        Settings.SessionReset = Wealth.Session.Restart;
         CopyDashboard();
         _fullKey = null;
         if (PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);

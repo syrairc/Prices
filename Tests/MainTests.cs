@@ -271,6 +271,14 @@ public sealed class MainTests
         Check.That(TestFrame.Vertices(new Settings().DrawGround, inWindow: true) > 0, "ground tab draws");
     }
 
+    [Test]
+    public void ProfitWidgetsDefaultFullOnCompactOff()
+    {
+        var settings = new Settings();
+        Check.That(settings.ProfitFull && !settings.ProfitCompact, "full on, compact off");
+        Check.That(TestFrame.Vertices(settings.DrawOverlay, inWindow: true) > 0, "overlay tab draws");
+    }
+
     sealed class Silent : System.Net.Http.HttpMessageHandler
     {
         protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken) => new System.Threading.Tasks.TaskCompletionSource<System.Net.Http.HttpResponseMessage>().Task;
