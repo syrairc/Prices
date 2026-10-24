@@ -139,6 +139,52 @@ public sealed class MainTests
         Check.Equal(0, Vertices(plugin, state));
     }
 
+    static Main MapPlugin(float unit = 8)
+    {
+        var plugin = new Main { Prices = new Dictionary<int, Price> { [1] = new(unit, null, null), [2] = new(3, null, null) } };
+        plugin.Settings.ShowTotals = false;
+        plugin.Settings.ProfitFull = false;
+        return plugin;
+    }
+
+    static GameState MapState(params (int BaseId, int Count)[] items) =>
+        GameState.Empty with { MapReward = new MapRewardView([.. items.Select((item, i) => new MapRewardItem(item.BaseId, item.Count, new Vector2(100 + i * 100, 100), new Vector2(194 + i * 100, 194)))]) };
+
+    [Test]
+    public void MapRewardDrawsOneTagPerPricedItem()
+    {
+        var plugin = MapPlugin();
+        var one = Vertices(plugin, MapState((1, 1), (99, 1)));
+        var two = Vertices(plugin, MapState((1, 1), (1, 1), (99, 1)));
+        Check.That(one > 0, "priced item draws a tag");
+        Check.Equal(one * 2, two);
+        Check.Equal(0, Vertices(plugin, MapState((99, 1))));
+    }
+
+    [Test]
+    public void MapRewardStackMultipliesByCount()
+    {
+        var plugin = MapPlugin();
+        plugin.Settings.MinValue = 10;
+        Check.Equal(0, Vertices(plugin, MapState((1, 1))));
+        Check.That(Vertices(plugin, MapState((1, 5))) > 0, "5 x 8 clears the 10 FE floor");
+        Check.Equal("40", plugin.TagFor(1, 5, false));
+    }
+
+    [Test]
+    public void MapRewardNullViewDrawsNothing()
+    {
+        Check.Equal(0, Vertices(MapPlugin(), GameState.Empty));
+    }
+
+    [Test]
+    public void MapRewardFollowsEnabled()
+    {
+        var plugin = MapPlugin();
+        plugin.Settings.Enabled = false;
+        Check.Equal(0, Vertices(plugin, MapState((1, 1))));
+    }
+
     [Test]
     public void UnpricedAndEmptyCellsGetNoTag()
     {

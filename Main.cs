@@ -569,6 +569,7 @@ public sealed class Main : Plugin<Settings>
     public override void Render()
     {
         DrawInventory();
+        DrawMapReward();
         DrawTotals();
         DrawGround();
         DrawCompare();
@@ -714,6 +715,18 @@ public sealed class Main : Plugin<Settings>
         }
         else if (state.Stash is { } stash && state.StashItems is { } items)
             DrawTags(items, stash.ClipMin, stash.ClipMax, stash.Cells, _ => true);
+    }
+
+    void DrawMapReward()
+    {
+        if (!Settings.Enabled || Game.State.MapReward is not { } view) return;
+        var icon = TagIcon(out var hasIcon);
+        foreach (var reward in view.Items)
+        {
+            var item = new InventoryItem(InventoryBag.Commodities, 0, "", reward.BaseId, 0, 0, 0, reward.Count, 0, 0);
+            if (Settings.TooCheap(item, Tags.Value(item, _prices)) || TagFor(reward.BaseId, reward.Count, false) is not { } text) continue;
+            DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, reward.Min, reward.Max, size) + new Vector2(Settings.OffsetX, Settings.OffsetY));
+        }
     }
 
     void DrawTags(IReadOnlyList<InventoryItem> items, Vector2 clipMin, Vector2 clipMax, BagCell[] cells, Func<InventoryItem, bool> onTab)
