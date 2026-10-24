@@ -45,9 +45,9 @@
     const dir = window.WEALTH_ICON_DIR;
     const icon = data.icons && data.icons[id];
     if (!dir || !icon) return null;
-    const file = (window.WEALTH_ICON_INDEX || {})[icon] || icon + '.png';
+    const path = (window.WEALTH_ICON_INDEX || {})[icon] || 'Items/' + icon + '.png';
     const parts = dir.replace(/\\/g, '/').split('/').map((part, i) => (i === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)));
-    return 'file:///' + parts.join('/') + '/Items/' + encodeURIComponent(file);
+    return 'file:///' + parts.join('/') + '/' + path.split('/').map(encodeURIComponent).join('/');
   }
 
   function Icon({ data, id }) {

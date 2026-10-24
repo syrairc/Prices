@@ -343,8 +343,13 @@ public sealed class DashboardTests
             Directory.CreateDirectory(Path.Combine(directory, "Items"));
             File.WriteAllText(Path.Combine(directory, "Items", "index.json"), """{"icons":{"UI_Item_One":{"file":"UI_Item_One.png","pak":"x"}}}""");
             var script = Main.IconScript(directory);
-            Check.That(script.Contains("\"UI_Item_One\":\"UI_Item_One.png\""));
+            Check.That(script.Contains("\"UI_Item_One\":\"Items/UI_Item_One.png\""));
             Check.That(script.Contains("WEALTH_ICON_DIR"));
+            Directory.CreateDirectory(Path.Combine(directory, "Skills"));
+            File.WriteAllText(Path.Combine(directory, "Skills", "index.json"), """{"icons":{"UI_Skill_One":{"file":"UI_Skill_One.png","pak":"x"},"UI_Item_One":{"file":"Dupe.png","pak":"x"}}}""");
+            script = Main.IconScript(directory);
+            Check.That(script.Contains("\"UI_Skill_One\":\"Skills/UI_Skill_One.png\""), "skills index");
+            Check.That(script.Contains("\"UI_Item_One\":\"Items/UI_Item_One.png\""), "items win a clash");
         }
         finally
         {
