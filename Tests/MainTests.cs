@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using EmberHUD;
@@ -275,56 +276,110 @@ public sealed class MainTests
         protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken) => new System.Threading.Tasks.TaskCompletionSource<System.Net.Http.HttpResponseMessage>().Task;
     }
 
-    static Main WealthPlugin(string? character = "Hero")
+    sealed class Wealthy : System.IDisposable
     {
-        var plugin = new Main { DataDirectory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "prices-main-" + System.Guid.NewGuid().ToString("N")), Http = new System.Net.Http.HttpClient(new Silent()), Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
-        plugin.Settings.Season = 1601;
-        plugin.Settings.GroundEnabled = false;
-        plugin.CharacterName = () => character;
-        return plugin;
+        public Main Plugin { get; }
+        public string Character { get; set; }
+        public long Time { get; set; } = 1000;
+
+        public Wealthy(string character = "Hero")
+        {
+            Character = character;
+            Plugin = new Main { DataDirectory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "prices-main-" + System.Guid.NewGuid().ToString("N")), Http = new System.Net.Http.HttpClient(new Silent()), Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
+            Plugin.Settings.Season = 1601;
+            Plugin.Settings.GroundEnabled = false;
+            Plugin.Clock = () => Time;
+            Plugin.CharacterName = () => Character == "" ? null : Character;
+        }
+
+        public string Wealth => System.IO.Path.Combine(Plugin.DataDirectory, "Wealth");
+
+        public void Tick()
+        {
+            TestGame.Set(GameState.Empty with { AreaId = 5, Area = new MapInfo("Map A", 1, null, null, false, [], []), Inventory = [Item(0, 1)] });
+            Plugin.Tick();
+            Plugin.WealthSave?.Wait();
+        }
+
+        public void Dispose()
+        {
+            Plugin.WealthSave?.Wait();
+            if (System.IO.Directory.Exists(Plugin.DataDirectory)) System.IO.Directory.Delete(Plugin.DataDirectory, true);
+        }
     }
 
     [Test]
     public void WealthCallsWantInventoryEveryTick()
     {
-        var plugin = WealthPlugin();
+        using var test = new Wealthy();
         TestGame.Set(GameState.Empty with { Ui = GameUi.Empty });
-        Check.That(TestGame.InventoryAskedDuring(plugin.Tick), "asked with the bag closed");
-        plugin.Settings.TrackWealth = false;
-        Check.That(!TestGame.InventoryAskedDuring(plugin.Tick), "not asked while off");
+        Check.That(TestGame.InventoryAskedDuring(test.Plugin.Tick), "asked with the bag closed");
+        test.Plugin.Settings.TrackWealth = false;
+        Check.That(!TestGame.InventoryAskedDuring(test.Plugin.Tick), "not asked while off");
     }
 
     [Test]
     public void WealthSavesOffTheTickThread()
     {
-        var plugin = WealthPlugin();
-        TestGame.Set(GameState.Empty with { AreaId = 5, Area = new MapInfo("Map A", 1, null, null, false, [], []), Inventory = [Item(0, 1)] });
-        plugin.Tick();
-        Check.That(plugin.WealthSave is not null, "save task started");
-        plugin.WealthSave!.GetAwaiter().GetResult();
-        var directory = System.IO.Path.Combine(plugin.DataDirectory, "Wealth");
-        Check.That(System.IO.File.Exists(System.IO.Path.Combine(directory, "Hero-1601.json")), "data file");
-        Check.That(System.IO.File.Exists(System.IO.Path.Combine(directory, "wealth-index.js")), "index");
+        using var test = new Wealthy();
+        test.Tick();
+        Check.That(test.Plugin.WealthSave is not null, "save task started");
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(test.Wealth, "Hero-1601.json")), "data file");
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(test.Wealth, "wealth-index.js")), "index");
+    }
+
+    [Test]
+    public void FailedSaveKeepsTheRetiredStore()
+    {
+        using var test = new Wealthy();
+        System.IO.Directory.CreateDirectory(test.Plugin.DataDirectory);
+        System.IO.File.WriteAllText(test.Wealth, "in the way");
+        test.Tick();
+        test.Character = "Other";
+        test.Time += 10_000;
+        test.Tick();
+        Check.Equal(1, test.Plugin.Wealth.Retired.Length);
+        System.IO.File.Delete(test.Wealth);
+        test.Time += 10_000;
+        test.Tick();
+        Check.Equal(0, test.Plugin.Wealth.Retired.Length);
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(test.Wealth, "Hero-1601.json")), "retired saved on the retry");
+    }
+
+    [Test]
+    public void FlushSavesPendingRetiredStores()
+    {
+        using var test = new Wealthy();
+        test.Tick();
+        test.Character = "Other";
+        test.Tick();
+        Check.Equal(1, test.Plugin.Wealth.Retired.Length);
+        test.Plugin.OnDisable();
+        Check.Equal(0, test.Plugin.Wealth.Retired.Length);
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(test.Wealth, "Other-1601.json")), "current");
     }
 
     [Test]
     public void WealthStatusSaysWhyNothingRecords()
     {
-        var plugin = WealthPlugin(character: null);
-        Check.That(string.Join("\n", plugin.WealthStatus()).Contains("character not readable yet"), "character line");
+        using var test = new Wealthy(character: "");
+        Check.That(test.Plugin.WealthStatus().Any(line => line.Contains("character not readable yet")), "character line");
+        test.Plugin.Settings.WealthPaused = true;
+        Check.That(test.Plugin.WealthStatus().Contains("Paused"), "paused line");
     }
 
     [Test]
     public void OpenDashboardSaysSoWhenItIsMissing()
     {
-        var plugin = WealthPlugin();
-        Check.That(plugin.OpenDashboard().Contains("not found"), "no throw, says so");
+        using var test = new Wealthy();
+        Check.That(test.Plugin.OpenDashboard().Contains("not found"), "no throw, says so");
     }
 
     [Test]
     public void DashboardCopyTakesNewerFilesAndToleratesNoSource()
     {
-        var plugin = WealthPlugin();
+        using var test = new Wealthy();
+        var plugin = test.Plugin;
         plugin.PluginDirectory = System.IO.Path.Combine(plugin.DataDirectory, "nothing-here");
         plugin.CopyDashboard();
         var source = System.IO.Path.Combine(plugin.DataDirectory, "plugin", "dashboard");
@@ -333,12 +388,11 @@ public sealed class MainTests
         System.IO.File.WriteAllText(System.IO.Path.Combine(source, "vendor", "react.js"), "r");
         plugin.PluginDirectory = System.IO.Path.Combine(plugin.DataDirectory, "plugin");
         plugin.CopyDashboard();
-        var target = System.IO.Path.Combine(plugin.DataDirectory, "Wealth");
-        Check.Equal("one", System.IO.File.ReadAllText(System.IO.Path.Combine(target, "index.html")));
-        Check.That(System.IO.File.Exists(System.IO.Path.Combine(target, "vendor", "react.js")), "vendor copied");
+        Check.Equal("one", System.IO.File.ReadAllText(System.IO.Path.Combine(test.Wealth, "index.html")));
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(test.Wealth, "vendor", "react.js")), "vendor copied");
         System.IO.File.WriteAllText(System.IO.Path.Combine(source, "index.html"), "two");
         System.IO.File.SetLastWriteTimeUtc(System.IO.Path.Combine(source, "index.html"), System.DateTime.UtcNow.AddMinutes(5));
         plugin.CopyDashboard();
-        Check.Equal("two", System.IO.File.ReadAllText(System.IO.Path.Combine(target, "index.html")));
+        Check.Equal("two", System.IO.File.ReadAllText(System.IO.Path.Combine(test.Wealth, "index.html")));
     }
 }

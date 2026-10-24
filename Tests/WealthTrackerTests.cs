@@ -140,7 +140,7 @@ public sealed class WealthTrackerTests
         Check.Equal("Other-12", tracker.Key);
         Check.Equal(0, first!.Data.Runs.Length);
         Check.Equal(0, tracker.Store!.Data.Runs.Length);
-        Check.That(tracker.Retired is { Key: "Hero-12" }, "old store handed over to be saved");
+        Check.Equal("Hero-12", tracker.Retired.Single().Key);
         Check.That(tracker.CurrentRun is not null, "B's run starts partial");
         Check.That(tracker.CurrentRun!.Partial, "partial");
     }
@@ -200,8 +200,75 @@ public sealed class WealthTrackerTests
     [Test]
     public void NamesComeFromTheLoc()
     {
+        ItemNames.Forget();
+        TestGame.UseLoc(key => key switch { "item_base|name|100300" => "FE", "item_base|name|1" => "Orb", _ => null }, null);
+        try
+        {
+            var (tracker, _) = Make();
+            Tick(tracker, Map([Item(1, 1), Item(2, 1, 1)]));
+            Check.Equal("Orb", tracker.Store!.Data.Names[1]);
+            Check.That(!tracker.Store.Data.Names.ContainsKey(2), "unknown name left out");
+        }
+        finally
+        {
+            TestGame.UseLoc(null, null);
+            ItemNames.Forget();
+        }
+    }
+
+    [Test]
+    public void EmptyPriceTableRecordsNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map([Item(1, 1)]), prices: new Dictionary<int, Price>()), "false");
+        Check.That(tracker.Store is null || tracker.Store.Data.Totals.Length == 0, "no totals point");
+    }
+
+    [Test]
+    public void EmptyInventoryRecordsNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map([])), "false");
+        Check.That(tracker.Store is null || tracker.Store.Data.Totals.Length == 0, "no totals point");
+    }
+
+    [Test]
+    public void NullInventoryMidRunKeepsTheBaseline()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 5)]));
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 5)]));
+        var baseline = tracker.Last;
+        clock.Advance(60);
+        Check.That(!Tick(tracker, Map(null)), "null read writes nothing");
+        Check.That(ReferenceEquals(baseline, tracker.Last), "last unchanged");
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 7)]));
+        var run = tracker.Store!.Data.Runs.Single();
+        Check.Equal(2, run.Loot.Single().Count);
+    }
+
+    [Test]
+    public void UnchangedStashTabIsNotStoredAgain()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 3)]));
+        clock.Advance(10);
+        Check.That(!Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 3)])), "same tab, nothing added");
+        clock.Advance(10);
+        Check.That(Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 4)])), "changed tab");
+    }
+
+    [Test]
+    public void DoubleSwitchKeepsBothRetired()
+    {
         var (tracker, _) = Make();
         Tick(tracker, Map([Item(1, 1)]));
-        Check.That(tracker.Store!.Data.Names.Count == 0 || tracker.Store.Data.Names.Values.All(name => name.Length > 0), "only real names");
+        Tick(tracker, Map([Item(1, 1)]), character: "B");
+        Tick(tracker, Map([Item(1, 1)]), character: "C");
+        Check.Equal(2, tracker.Retired.Length);
+        tracker.Release(tracker.Retired[0]);
+        Check.Equal("B-12", tracker.Retired.Single().Key);
     }
 }

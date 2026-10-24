@@ -26,7 +26,20 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
 
     public bool Paused { get; set; }
 
-    public (string Key, WealthStore Store)? Retired { get; set; }
+    readonly List<(string Key, WealthStore Store)> retired = [];
+
+    public (string Key, WealthStore Store)[] Retired
+    {
+        get
+        {
+            lock (retired) return [.. retired];
+        }
+    }
+
+    public void Release((string Key, WealthStore Store) item)
+    {
+        lock (retired) retired.Remove(item);
+    }
 
     public Run? CurrentRun => runs.Open is { } open && Last is { } last
         ? new Run(open.At, last.At, open.AreaName, open.Total, last.Total, runs.Before is null, last.Unpriced > 0, Valuation.Diff(open.Lines, last.Lines, prices), [])
@@ -34,7 +47,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
 
     public bool Tick(GameState state, IReadOnlyDictionary<int, Price> current, int? season, int snapshotMinutes, string? character)
     {
-        if (Paused || string.IsNullOrEmpty(character) || season is not { } known || state.Inventory is not { } bag || state.Area is not { } area) return false;
+        if (Paused || string.IsNullOrEmpty(character) || season is not { } known || state.Inventory is not { Length: > 0 } bag || state.Area is not { } area || current.Count == 0) return false;
         prices = current;
         var key = $"{character}-{known}";
         if (key != Key) Switch(key);
@@ -44,9 +57,15 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         StashTab? stored = null;
         if (state.Stash is { } stash && state.StashItems is { } items && (lastTab != stash.Tab || at - lastTabAt >= StashEvery))
         {
-            stored = new StashTab(stash.Tab, at, Valuation.Value(items, prices, at, state.AreaId, area.Name, area.IsTown).Lines);
-            store.SetTab(stored);
-            (lastTab, lastTabAt, added) = (stash.Tab, at, true);
+            var lines = Valuation.Value(items, prices, at, state.AreaId, area.Name, area.IsTown).Lines;
+            var old = store.Data.Tabs.FirstOrDefault(tab => tab.Index == stash.Tab);
+            if (old is null || !old.Lines.SequenceEqual(lines))
+            {
+                stored = new StashTab(stash.Tab, at, lines);
+                store.SetTab(stored);
+                added = true;
+            }
+            (lastTab, lastTabAt) = (stash.Tab, at);
         }
         var due = lastArea != (state.AreaId, area.Name) || at - lastSnapshotAt >= TimeSpan.FromMinutes(Math.Max(1, snapshotMinutes));
         if (!due) return added;
@@ -66,7 +85,8 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
 
     void Switch(string key)
     {
-        if (Key is { } old && Store is { } oldStore) Retired = (old, oldStore);
+        if (Key is { } old && Store is { } oldStore)
+            lock (retired) retired.Add((old, oldStore));
         (Key, Store) = (key, Open(key));
         runs.Reset();
         (Last, lastArea, lastTab) = (null, null, null);

@@ -51,9 +51,9 @@ public sealed class Main : Plugin<Settings>
     readonly CompareCache _compare = new();
     int _unusedWidth, _unusedHeight;
     WealthTracker? _wealth;
-    bool _wealthDirty;
+    volatile bool _wealthDirty;
     long _nextWealthSaveAt;
-    string _wealthError = "";
+    volatile string _wealthError = "";
 
     internal string DataDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Config", "Prices");
 
@@ -168,19 +168,22 @@ public sealed class Main : Plugin<Settings>
         Wealth.Paused = Settings.WealthPaused;
         if (Wealth.Tick(Game.State, _prices, FileSeason(), Settings.SnapshotMinutes, CharacterName())) _wealthDirty = true;
         var retired = Wealth.Retired;
-        if ((retired is null && !(_wealthDirty && Clock() >= _nextWealthSaveAt)) || WealthSave is { IsCompleted: false }) return;
-        Wealth.Retired = null;
+        if (!(retired.Length > 0 || _wealthDirty) || Clock() < _nextWealthSaveAt || WealthSave is { IsCompleted: false }) return;
         _wealthDirty = false;
         _nextWealthSaveAt = Clock() + 5000;
         var (directory, current, key) = (WealthDirectory, Wealth.Store, Wealth.Key);
         WealthSave = Task.Run(() => SaveWealth(directory, retired, current, key));
     }
 
-    void SaveWealth(string directory, (string Key, WealthStore Store)? retired, WealthStore? current, string? key)
+    void SaveWealth(string directory, (string Key, WealthStore Store)[] retired, WealthStore? current, string? key)
     {
         try
         {
-            retired?.Store.Save(directory, retired.Value.Key);
+            foreach (var item in retired)
+            {
+                item.Store.Save(directory, item.Key);
+                Wealth.Release(item);
+            }
             if (current is not null && key is not null) current.Save(directory, key);
             _wealthError = "";
         }
@@ -195,19 +198,19 @@ public sealed class Main : Plugin<Settings>
     {
         try
         {
-            WealthSave?.GetAwaiter().GetResult();
+            WealthSave?.Wait();
         }
-        catch (Exception ex) when (ex is AggregateException or TaskCanceledException)
+        catch (AggregateException)
         {
-            // already reported by the save
         }
-        if (_wealth is { Store: { } store, Key: { } key }) SaveWealth(WealthDirectory, null, store, key);
+        if (_wealth is { } tracker) SaveWealth(WealthDirectory, tracker.Retired, tracker.Store, tracker.Key);
     }
 
     internal string[] WealthStatus()
     {
         var tracker = Wealth;
         List<string> lines = [];
+        if (Settings.WealthPaused) lines.Add("Paused");
         lines.Add(tracker.Key is { } key ? "Profile: " + key : CharacterName() is null ? "Profile: character not readable yet" : "Profile: season not known yet");
         if (tracker.Store is { } store)
         {
