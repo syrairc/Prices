@@ -79,7 +79,34 @@
     return [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0) * dir);
   }
 
-  const api = { BAGS, tabName, isStale, ago, buildRows, summarise, breakdown, findDivine, recent, sortRows };
+  const excludedKey = profile => 'wealth.excluded.' + profile;
+
+  const pruneExcluded = (saved, rows) => {
+    const present = new Set(rows.map(r => r.key));
+    return new Set((Array.isArray(saved) ? saved : []).filter(key => present.has(key)));
+  };
+
+  function filterRows(rows, tab, search, nameOf) {
+    const needle = search.trim().toLowerCase();
+    return rows.filter(r => (tab === null || r.tab === tab) && (!needle || nameOf(r.baseId).toLowerCase().includes(needle)));
+  }
+
+  const divines = (total, divine) => (divine > 0 ? total / divine : null);
+  const unitMode = (divine, mode) => (divine > 0 && mode === 'value' ? { unit: 'Div', scale: 1 / divine } : { unit: 'FE', scale: 1 });
+
+  function tabList(data) {
+    const list = [];
+    if (data.bag) list.push({ index: BAGS, seenAt: data.bag.at, empty: false, never: false });
+    const seen = new Map((data.tabs || []).map(t => [t.index, t]));
+    const last = Math.max(-1, ...seen.keys());
+    for (let i = 0; i <= last; i++) {
+      const t = seen.get(i);
+      list.push(t ? { index: i, seenAt: t.seenAt, empty: t.lines.length === 0, never: false } : { index: i, seenAt: null, empty: false, never: true });
+    }
+    return list;
+  }
+
+  const api = { BAGS, tabName, isStale, ago, buildRows, summarise, breakdown, findDivine, recent, sortRows, excludedKey, pruneExcluded, filterRows, divines, unitMode, tabList };
   if (typeof module !== 'undefined') {
     module.exports = api;
     return;
@@ -94,53 +121,48 @@
     return html`<span className="switch">${options.map(([id, label]) => html`<button key=${id} className=${'btn' + (value === id ? ' on' : '')} onClick=${() => onChange(id)}>${label}</button>`)}</span>`;
   }
 
-  function WealthScreen({ data, now, ui }) {
+  function WealthScreen({ data, profile, now, ui }) {
     const { NameCell, Tile, num, stored, store } = ui;
     const nameOf = id => (data.names && data.names[id]) || '#' + id;
-    const [excluded, setExcluded] = useState(() => {
-      const saved = stored('wealth.excluded', []);
-      return new Set(Array.isArray(saved) ? saved : []);
-    });
+    const rows = useMemo(() => buildRows(data), [data]);
+    const [saved, setSaved] = useState(() => stored(excludedKey(profile), []));
+    const excluded = useMemo(() => pruneExcluded(saved, rows), [saved, rows]);
     const [view, setView] = useState('tabs');
     const [mode, setMode] = useState('value');
     const [tab, setTab] = useState(null);
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState({ by: 'total', dir: -1 });
     const divine = useMemo(() => findDivine(data), [data]);
-    const rows = useMemo(() => buildRows(data), [data]);
     const sum = useMemo(() => summarise(rows, excluded), [rows, excluded]);
     const slices = useMemo(() => breakdown(rows, excluded, 8), [rows, excluded]);
     const points = useMemo(() => recent(data.totals || [], now), [data, Math.floor(now / 60000)]);
     const shown = useMemo(() => {
-      const needle = search.trim().toLowerCase();
-      const list = rows.filter(r => (tab === null || r.tab === tab) && (!needle || nameOf(r.baseId).toLowerCase().includes(needle)));
-      return sortRows(list, sort.by, sort.dir, nameOf);
+      return sortRows(filterRows(rows, tab, search, nameOf), sort.by, sort.dir, nameOf);
     }, [rows, tab, search, sort, data]);
-    const tabs = [...(data.bag ? [{ index: BAGS, seenAt: data.bag.at }] : []), ...(data.tabs || [])];
-    const staleTabs = tabs.filter(t => t.index !== BAGS && isStale(t.seenAt, now));
+    const tabs = tabList(data);
+    const staleTabs = tabs.filter(t => t.index !== BAGS && !t.never && isStale(t.seenAt, now));
     const toggle = key => {
       const next = new Set(excluded);
       if (!next.delete(key)) next.add(key);
-      setExcluded(next);
-      store('wealth.excluded', [...next]);
+      setSaved([...next]);
+      store(excludedKey(profile), [...next]);
     };
     const head = (by, label, right) => html`<th className=${'sort' + (right ? ' r' : '')} onClick=${() => setSort({ by, dir: sort.by === by ? -sort.dir : by === 'name' || by === 'tab' ? 1 : -1 })}>${label}${sort.by === by ? (sort.dir < 0 ? ' v' : ' ^') : ''}</th>`;
-    const unit = divine > 0 && mode === 'value' ? 'Div' : 'FE';
-    const scale = divine > 0 && mode === 'value' ? 1 / divine : 1;
+    const { unit, scale } = unitMode(divine, mode);
     const sliceLabel = s => (s.baseId === null ? 'Other' : nameOf(s.baseId)) + (mode === 'percent' ? '' : ' - ' + num(s.value * scale, divine > 0 ? 2 : 0) + ' ' + unit);
     return html`
       <div>
         <div className="tiles">
           <${Tile} label="Wealth" value=${num(sum.total, 0) + ' FE'} sub=${sum.excluded > 0 ? sum.excluded + ' row(s) left out' : 'everything counted'} />
-          <${Tile} label="Divines" value=${divine > 0 ? num(sum.total / divine, 2) : '-'} sub=${divine > 0 ? '1 Div = ' + num(divine, 1) + ' FE' : 'no Divine Orb price, FE only'} />
+          <${Tile} label="Divines" value=${divines(sum.total, divine) !== null ? num(divines(sum.total, divine), 2) : '-'} sub=${divine > 0 ? '1 Div = ' + num(divine, 1) + ' FE' : 'no Divine Orb price, FE only'} />
           <${Tile} label="Bags" value=${num(sum.bags, 0) + ' FE'} />
           <${Tile} label="Stash" value=${num(sum.stash, 0) + ' FE'} sub=${staleTabs.length > 0 ? staleTabs.length + ' tab(s) stale' : ''} tint=${staleTabs.length > 0 ? 'bad' : ''} />
-          <${Tile} label="Items" value=${sum.included} />
+          <${Tile} label="Rows" value=${sum.included} sub="item rows counted" />
           <${Tile} label="Unpriced" value=${sum.unpriced} tint=${sum.unpriced > 0 ? 'bad' : ''} sub=${sum.unpriced > 0 ? 'valued 0 FE' : ''} />
         </div>
         <div className="cols">
           <section className="panel">
-            <div className="panel-head"><h3>Wealth</h3><span className="dim">last 7 days</span></div>
+            <div className="panel-head"><h3>Wealth</h3><span className="dim">last 7 days - chart ignores exclusions</span></div>
             ${points.length === 0 ? html`<div className="empty">no snapshots in the last 7 days</div>` : points.length < 2 ? html`<div className="empty">one snapshot so far</div>` : html`<${LineChart} points=${points} color="#F9DD75" unit="FE" />`}
             ${staleTabs.length > 0 && html`<p className="warn-text">${staleTabs.length} stash tab(s) not seen for over a day, their part of the total is old.</p>`}
           </section>
@@ -175,11 +197,12 @@
               <ul className="side">
                 <li className=${tab === null ? 'on' : ''} onClick=${() => setTab(null)}><b>All</b></li>
                 ${tabs.map(t => {
+                  if (t.never) return html`<li key=${t.index} className="never"><b>${tabName(t.index)}</b><span className="dim">never seen - open it in game</span></li>`;
                   const stale = t.index !== BAGS && isStale(t.seenAt, now);
                   return html`
                     <li key=${t.index} className=${(tab === t.index ? 'on ' : '') + (stale ? 'stale' : '')} onClick=${() => setTab(t.index)}>
                       <b>${tabName(t.index)}</b>
-                      <span className="dim">synced ${ago(now - Date.parse(t.seenAt))}</span>
+                      <span className="dim">synced ${ago(now - Date.parse(t.seenAt))}${t.empty ? ' - empty' : ''}</span>
                       ${stale && html`<em className="warn" title=${"Last seen " + new Date(t.seenAt).toLocaleString()}>stale - seen ${new Date(t.seenAt).toLocaleDateString()}</em>`}
                     </li>`;
                 })}

@@ -161,7 +161,7 @@ public sealed class DashboardTests
             foreach (var key in keys)
             {
                 Check.That(element.TryGetProperty(key, out _), "json " + key);
-                Check.That(Regex.IsMatch(js, @"\." + key + @"\b|\b" + key + @"\s*:"), "wealth.js " + key);
+                Check.That(Regex.IsMatch(js, @"[\w\)\]]\." + key + @"\b"), "wealth.js reads ." + key);
             }
         }
         Has(root, "tabs", "bag", "totals");
@@ -237,6 +237,67 @@ public sealed class DashboardTests
             Check.Equal(4, slices.Length);
             Check.That(slices[0] >= slices[1] && slices[1] >= slices[2]);
             Near(lines.Sum(l => l.Value), slices.Sum());
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void WealthLogicSortSearchDivineAndStorage()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "prices-dash-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            SampleWealth.Write(directory, Dashboard(), SampleWealth.Begin);
+            var script = "const m=require(process.argv[1]);const d=JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));" +
+                "const nm=id=>d.names[id]||'#'+id;const rows=m.buildRows(d);" +
+                "const by=(k,dir)=>m.sortRows(rows,k,dir,nm);" +
+                "const tot=by('total',-1).map(r=>r.value);const qty=by('qty',1).map(r=>r.count);const names=by('name',1).map(r=>nm(r.baseId).toLowerCase());" +
+                "const found=m.filterRows(rows,null,'  RELIC ',nm).map(r=>r.baseId);const inTab=m.filterRows(rows,m.BAGS,'',nm).length;" +
+                "const saved=[rows[0].key,'9:99999'];const pruned=[...m.pruneExcluded(saved,rows)];" +
+                "const list=m.tabList({bag:d.bag,tabs:[{index:0,seenAt:d.bag.at,lines:[]},{index:3,seenAt:d.bag.at,lines:[1]}]}).map(t=>[t.index,t.never,t.empty]);" +
+                "console.log(JSON.stringify({tot,qty,names,found,inTab,bagRows:d.bag.lines.length,pruned,first:rows[0].key,k:[m.excludedKey('Hero-12'),m.excludedKey('Other-1')]," +
+                "zero:[m.divines(0,3),m.divines(5,0),m.unitMode(0,'value'),m.unitMode(4,'value'),m.unitMode(4,'percent')],list}));";
+            var info = new ProcessStartInfo("node") { RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, UseShellExecute = false };
+            foreach (var arg in new[] { "-e", script, Path.Combine(directory, "wealth.js"), Path.Combine(directory, SampleWealth.Key + ".json") }) info.ArgumentList.Add(arg);
+            string output;
+            var errors = new System.Text.StringBuilder();
+            try
+            {
+                using var process = Process.Start(info)!;
+                process.ErrorDataReceived += (_, e) => errors.AppendLine(e.Data);
+                process.BeginErrorReadLine();
+                output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                Check.Equal(0, process.ExitCode, errors.ToString());
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Console.WriteLine("WealthLogicSortSearchDivineAndStorage skipped: node not found");
+                return;
+            }
+            var r = JsonDocument.Parse(output).RootElement;
+            double[] Doubles(string name) => r.GetProperty(name).EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            var total = Doubles("tot");
+            Check.That(total.Zip(total.Skip(1)).All(p => p.First >= p.Second), "total desc");
+            var qty = Doubles("qty");
+            Check.That(qty.Zip(qty.Skip(1)).All(p => p.First <= p.Second), "qty asc");
+            var names = r.GetProperty("names").EnumerateArray().Select(e => e.GetString()!).ToArray();
+            Check.That(names.Zip(names.Skip(1)).All(p => string.CompareOrdinal(p.First, p.Second) <= 0), "name asc");
+            Check.Equal(SampleWealth.Unpriced, r.GetProperty("found").EnumerateArray().Single().GetInt32());
+            Check.Equal(r.GetProperty("bagRows").GetInt32(), r.GetProperty("inTab").GetInt32());
+            Check.Equal(1, r.GetProperty("pruned").GetArrayLength());
+            Check.Equal(r.GetProperty("first").GetString(), r.GetProperty("pruned")[0].GetString());
+            Check.Equal("wealth.excluded.Hero-12|wealth.excluded.Other-1", string.Join('|', r.GetProperty("k").EnumerateArray().Select(e => e.GetString())));
+            var zero = r.GetProperty("zero");
+            Check.Equal(0.0, zero[0].GetDouble());
+            Check.That(zero[1].ValueKind == JsonValueKind.Null, "no divine price gives no Divines");
+            Check.Equal("FE", zero[2].GetProperty("unit").GetString());
+            Check.Equal("Div", zero[3].GetProperty("unit").GetString());
+            Check.Equal("FE", zero[4].GetProperty("unit").GetString());
+            Check.Equal("[[-1,false,false],[0,false,true],[1,true,false],[2,true,false],[3,false,false]]", r.GetProperty("list").GetRawText().Replace(" ", ""));
         }
         finally
         {
