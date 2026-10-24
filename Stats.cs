@@ -18,7 +18,7 @@ public static class Stats
         if (runs.Count == 0) return new Summary(0, 0, 0, 0, TimeSpan.Zero, TimeSpan.Zero);
         var net = runs.Sum(run => Value(run, economy));
         var active = TimeSpan.FromTicks(runs.Sum(run => (run.End - run.Start).Ticks));
-        var total = economy.WallClock ? runs.Max(run => run.End) - runs.Min(run => run.Start) : active;
+        var total = economy.WallClock ? TimeSpan.FromTicks(Math.Max(0, (now - runs.Min(run => run.Start)).Ticks)) : active;
         return new Summary(net, total > TimeSpan.Zero ? (float)(net / total.TotalHours) : 0, net / runs.Count, runs.Count, active / runs.Count, total);
     }
 

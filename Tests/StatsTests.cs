@@ -47,7 +47,10 @@ public sealed class StatsTests
     {
         var runs = new[] { MakeRun(0, 60, 10), MakeRun(120, 60, 10) };
         Check.Equal(TimeSpan.FromSeconds(120), Stats.Summarise(runs, Plain, T0).TotalTime);
-        Check.Equal(TimeSpan.FromSeconds(180), Stats.Summarise(runs, new Economy(false, false, true), T0).TotalTime);
+        var wall = Stats.Summarise(runs, new Economy(false, false, true), T0.AddSeconds(300));
+        Check.Equal(TimeSpan.FromSeconds(300), wall.TotalTime);
+        Check.Equal(240f, wall.FePerHour);
+        Check.Equal(TimeSpan.Zero, Stats.Summarise(runs, new Economy(false, false, true), T0.AddSeconds(-5)).TotalTime);
     }
 
     [Test]
