@@ -578,7 +578,7 @@ public sealed class Main : Plugin<Settings>
 
     void DrawProfit()
     {
-        if (!(Settings.Enabled && Settings.TrackWealth && !Settings.WealthPaused && (Settings.ProfitFull || Settings.ProfitCompact))) return;
+        if (!(Settings.Enabled && Settings.TrackWealth && !Settings.WealthPaused && (Settings.ProfitFull || Settings.ProfitCompact)) || !ProfitShown(Game.State, Settings)) return;
         if (Clock() >= _nextProfitAt)
         {
             _nextProfitAt = Clock() + 250;
@@ -586,6 +586,9 @@ public sealed class Main : Plugin<Settings>
         }
         _profit.Draw(Settings, _profitView, TagIcon(out var hasIcon, Settings.ProfitIcon), hasIcon);
     }
+
+    internal static bool ProfitShown(GameState state, Settings settings) =>
+        !(settings.ProfitHideFullScreen && state.Ui.AnyFullScreen && !(settings.ProfitKeepOnTradeHouse && state.Trade is not null));
 
     internal static string CompareLabel(float value) =>
         Math.Abs(value) < 0.05f ? "0%" : value == 999 ? "+999%" : (value > 0 ? "+" : "") + value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";

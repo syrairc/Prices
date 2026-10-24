@@ -634,4 +634,24 @@ public sealed class MainTests
         plugin.CopyDashboard();
         Check.Equal("two", System.IO.File.ReadAllText(System.IO.Path.Combine(test.Wealth, "index.html")));
     }
+
+    static readonly GameUi FullScreenPanel = new([new GamePanel("Map", PanelKind.WorldMap, default, new Vector2(900, 600), true)]);
+
+    [Test]
+    public void ProfitHidesBehindFullScreenPanels()
+    {
+        var covered = new GameState { Ui = FullScreenPanel };
+        Check.That(!Main.ProfitShown(covered, new Settings()), "covered");
+        Check.That(Main.ProfitShown(covered, new Settings { ProfitHideFullScreen = false }), "hiding off");
+        Check.That(Main.ProfitShown(new GameState { Ui = Open }, new Settings()), "bag is not full screen");
+    }
+
+    [Test]
+    public void ProfitStaysOnTheTradeHouseWhenKept()
+    {
+        var trade = new GameState { Ui = FullScreenPanel, Trade = new TradePage(1, true, 0, [], "") };
+        Check.That(!Main.ProfitShown(trade, new Settings()), "hidden by default");
+        Check.That(Main.ProfitShown(trade, new Settings { ProfitKeepOnTradeHouse = true }), "kept on trade house");
+        Check.That(!Main.ProfitShown(new GameState { Ui = FullScreenPanel }, new Settings { ProfitKeepOnTradeHouse = true }), "other panels still hide");
+    }
 }
