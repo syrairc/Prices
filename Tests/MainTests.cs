@@ -82,7 +82,72 @@ public sealed class MainTests
         asked.SetValue(null, 0L);
     }
 
-    static readonly GameUi OpenWithSort = new([new GamePanel("Bag", PanelKind.Inventory, default, new Vector2(900, 600), false) { Parts = [new NamedRect("UIButton_Arrage", new Vector2(700, 20), new Vector2(780, 60))] }]);
+    static readonly GameUi BoothOnly = new([new GamePanel(Main.BoothPanel, PanelKind.Other, default, new Vector2(900, 600), false)]);
+    static readonly GameUi BoothWithStash = new([new GamePanel(Main.BoothPanel, PanelKind.Other, default, new Vector2(900, 600), false) { Parts = [new NamedRect(Main.StashPart, new Vector2(700, 20), new Vector2(780, 60))] }]);
+
+    static GameState BoothState(int cells, params InventoryItem[] items) => GameState.Empty with { Ui = BoothOnly, Booth = Bag(cells), Inventory = items };
+
+    [Test]
+    public void BoothDrawsOneTagPerPricedVisibleCell()
+    {
+        var plugin = Plugin();
+        var one = Vertices(plugin, BoothState(3, Item(0, 1), Item(2, 99)));
+        var two = Vertices(plugin, BoothState(3, Item(0, 1), Item(1, 1), Item(2, 99)));
+        Check.That(one > 0, "one priced item draws a tag");
+        Check.Equal(one * 2, two);
+        Check.Equal(Vertices(plugin, State(3, Item(0, 1), Item(1, 1))), two);
+    }
+
+    [Test]
+    public void BoothTotalSitsLeftOfTheStashButton()
+    {
+        var plugin = Plugin(totals: true);
+        plugin.Settings.Enabled = false;
+        Check.That(Vertices(plugin, BoothState(3, Item(0, 1)) with { Ui = BoothWithStash }) > 0, "stash button found draws the total");
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1))));
+        plugin.Settings.ShowTotals = false;
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1)) with { Ui = BoothWithStash }));
+    }
+
+    [Test]
+    public void BoothNotOpenDrawsNothing()
+    {
+        var plugin = Plugin();
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1)) with { Ui = GameUi.Empty }));
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1)) with { Booth = null }));
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(0, 1)) with { Inventory = null }));
+    }
+
+    [Test]
+    public void AsksForTheInventoryWhileTheBoothPanelIsOpen()
+    {
+        var asked = typeof(Game).GetProperty("InventoryAsked", BindingFlags.NonPublic | BindingFlags.Static)!;
+        asked.SetValue(null, 0L);
+        Vertices(Plugin(), BoothState(3, Item(0, 1)) with { Ui = GameUi.Empty });
+        Check.Equal(0L, (long)asked.GetValue(null)!);
+        Vertices(Plugin(), BoothState(3, Item(0, 1)));
+        Check.That((long)asked.GetValue(null)! != 0, "asked while open");
+        asked.SetValue(null, 0L);
+    }
+
+    [Test]
+    public void BoothTabFiltersItemsByBag()
+    {
+        var plugin = Plugin();
+        var gear = Item(0, 1) with { Bag = InventoryBag.Commodities };
+        var state = BoothState(3, gear) with { Booth = Bag(3) with { Tab = InventoryBag.Equipment } };
+        Check.Equal(0, Vertices(plugin, state));
+    }
+
+    [Test]
+    public void UnpricedAndEmptyCellsGetNoTag()
+    {
+        var plugin = Plugin();
+        Check.Equal(0, Vertices(plugin, BoothState(3, Item(1, 99))));
+        Check.Equal(0, Vertices(plugin, BoothState(3)));
+    }
+
+    static readonly GameUi OpenWithSort =new([new GamePanel("Bag", PanelKind.Inventory, default, new Vector2(900, 600), false) { Parts = [new NamedRect("UIButton_Arrage", new Vector2(700, 20), new Vector2(780, 60))] }]);
 
     [Test]
     public void InventoryTotalSitsLeftOfTheSortButton()

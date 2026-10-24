@@ -19,6 +19,8 @@ public sealed class Main : Plugin<Settings>
     const float GroundGap = 4;
     const float SortGap = 8;
     const string SortPart = "UIButton_Arrage";
+    internal const string BoothPanel = "AuctionHouseV2_C";
+    internal const string StashPart = "Button_WareHouse";
 
     static readonly System.Drawing.Color CompareGreen = System.Drawing.Color.FromArgb(0x5C, 0xD6, 0x6B);
     static readonly System.Drawing.Color CompareRed = System.Drawing.Color.FromArgb(0xE5, 0x57, 0x4F);
@@ -623,10 +625,17 @@ public sealed class Main : Plugin<Settings>
     {
         var state = Game.State;
         if (state.Stash is { } shown && state.StashItems is { } shownItems) _stashTabs[shown.Tab] = shownItems;
-        if (!Settings.ShowTotals || OpenKind(state.Ui) is null) return;
+        var booth = BoothOpen(state.Ui);
+        if (!Settings.ShowTotals || !(booth || OpenKind(state.Ui) is not null)) return;
         Game.WantInventory();
         var icon = TagIcon(out var hasIcon);
-        if (state.Inventory is { } inventory && SortButton(state.Ui) is { } sort)
+        if (booth)
+        {
+            if (state.Booth is { } view && state.Inventory is { } stock && FindPart(state.Ui, p => p.Name == BoothPanel, StashPart) is { } stashButton)
+                DrawTag(BagTotalText(stock, view), icon, hasIcon, size => new Vector2(stashButton.Min.X - SortGap - size.X, (stashButton.Min.Y + stashButton.Max.Y - size.Y) / 2));
+            return;
+        }
+        if (state.Inventory is { } inventory && FindPart(state.Ui, p => p.Kind == PanelKind.Inventory, SortPart) is { } sort)
             DrawTag(BagTotalText(inventory, state.Bag), icon, hasIcon, size => new Vector2(sort.Min.X - SortGap - size.X, (sort.Min.Y + sort.Max.Y - size.Y) / 2));
         if (state.Stash is { } stash && _stashTabs.TryGetValue(stash.Tab, out var tab))
         {
@@ -669,12 +678,14 @@ public sealed class Main : Plugin<Settings>
         return origin;
     }
 
-    static NamedRect? SortButton(GameUi ui)
+    static bool BoothOpen(GameUi ui) => ui.Panels.Any(p => p.Name == BoothPanel);
+
+    static NamedRect? FindPart(GameUi ui, Func<GamePanel, bool> panel, string part)
     {
-        foreach (var panel in ui.Panels)
-            if (panel.Kind == PanelKind.Inventory)
-                foreach (var part in panel.Parts)
-                    if (part.Name == SortPart) return part;
+        foreach (var candidate in ui.Panels)
+            if (panel(candidate))
+                foreach (var rect in candidate.Parts)
+                    if (rect.Name == part) return rect;
         return null;
     }
 
@@ -684,6 +695,13 @@ public sealed class Main : Plugin<Settings>
     {
         if (!Settings.Enabled) return;
         var state = Game.State;
+        if (BoothOpen(state.Ui))
+        {
+            Game.WantInventory();
+            if (state.Booth is { } booth && state.Inventory is { } stock)
+                DrawTags(stock, booth.ClipMin, booth.ClipMax, booth.Cells, item => item.Bag == booth.Tab);
+            return;
+        }
         var kind = OpenKind(state.Ui);
         if (kind is null) return;
         Game.WantInventory();
