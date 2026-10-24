@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
@@ -183,6 +185,77 @@ public sealed class MainTests
         var plugin = MapPlugin();
         plugin.Settings.Enabled = false;
         Check.Equal(0, Vertices(plugin, MapState((1, 1))));
+    }
+
+    const int Unique = 110103;
+    const int UniqueBase = 4518;
+
+    static GameState BossState(int baseId, int specialId) =>
+        GameState.Empty with { MapReward = new MapRewardView([new MapRewardItem(baseId, 1, new Vector2(100, 100), new Vector2(194, 194), specialId)], Boss: true) };
+
+    static Main BossPlugin(long unidentifiedPrice = 0)
+    {
+        var plugin = new Main { DataDirectory = Path.Combine(Path.GetTempPath(), "prices-boss-" + Guid.NewGuid().ToString("N")), UnixClock = () => 1_800_000_000 };
+        plugin.Settings.UseTitrack = false;
+        plugin.Settings.UseEtor = false;
+        plugin.Settings.UseLocal = true;
+        plugin.Settings.GroundEnabled = false;
+        plugin.Settings.Season = 1601;
+        plugin.Settings.ShowTotals = false;
+        plugin.Settings.ProfitFull = false;
+        plugin.Settings.Enabled = false;
+        var good = new TradeGood(1, 100300, unidentifiedPrice, "Available", new InventoryItem(InventoryBag.Commodities, 0, "id", UniqueBase, 0, 0, 100, 1, 1, 0)) { SpecialId = Unique, Unidentified = true, Affixes = [] };
+        TestGame.Set(GameState.Empty with { TradeGoods = unidentifiedPrice > 0 ? [good] : [] });
+        plugin.Tick();
+        plugin.Settings.Enabled = true;
+        plugin.Prices = new Dictionary<int, Price> { [UniqueBase] = new(3, null, null) };
+        return plugin;
+    }
+
+    [Test]
+    public void BossDropPricesAsUnidentifiedLegendary()
+    {
+        var plugin = BossPlugin(400);
+        Check.Equal("?400", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
+        Check.That(Vertices(plugin, BossState(UniqueBase, Unique)) > 0, "legendary price draws a tag");
+        Check.That(Vertices(plugin, BossState(UniqueBase, 0)) > 0, "no special id keeps the base price path");
+    }
+
+    [Test]
+    public void BossDropWithoutAPriceHasNoTag()
+    {
+        var plugin = BossPlugin();
+        plugin.Prices = new Dictionary<int, Price>();
+        Check.Equal(0, Vertices(plugin, BossState(UniqueBase, Unique)));
+    }
+
+    [Test]
+    public void BossDropFallsBackToCommunityPriceById()
+    {
+        var plugin = BossPlugin();
+        plugin.Prices = new Dictionary<int, Price> { [Unique] = new(50, null, null) };
+        Check.Equal("?50", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
+        Check.That(Vertices(plugin, BossState(UniqueBase, Unique)) > 0, "community price by id draws a tag");
+    }
+
+    [Test]
+    public void HideCheapUsesTheLegendaryValue()
+    {
+        var plugin = BossPlugin(400);
+        plugin.Prices = new Dictionary<int, Price> { [UniqueBase] = new(3, null, null) };
+        plugin.Settings.MinValue = 100;
+        Check.That(Vertices(plugin, BossState(UniqueBase, Unique)) > 0, "400 clears the floor though the base price is 3");
+        plugin.Settings.MinValue = 500;
+        Check.Equal(0, Vertices(plugin, BossState(UniqueBase, Unique)));
+    }
+
+    [Test]
+    public void BossViewUsesTheBossOffsetsAndMapViewTheMapOnes()
+    {
+        var plugin = MapPlugin();
+        (plugin.Settings.MapRewardOffsetX, plugin.Settings.MapRewardOffsetY, plugin.Settings.BossRewardOffsetX, plugin.Settings.BossRewardOffsetY) = (1, 2, 3, 4);
+        Check.Equal(new Vector2(3, 4), plugin.RewardOffset(new MapRewardView([], Boss: true)));
+        Check.Equal(new Vector2(1, 2), plugin.RewardOffset(new MapRewardView([])));
     }
 
     [Test]

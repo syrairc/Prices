@@ -17,6 +17,8 @@ public sealed partial class Settings : PluginSettings
     public int OffsetY = 8;
     public int MapRewardOffsetX = -10;
     public int MapRewardOffsetY = -10;
+    public int BossRewardOffsetX;
+    public int BossRewardOffsetY;
     public TextStyle Text = new() { Color = Color.FromArgb(0xF9, 0xDD, 0x75), ShadowEnabled = true };
     public bool ShowIcon = true;
     public bool ShowGrey = true;
@@ -270,6 +272,8 @@ public sealed partial class Settings : PluginSettings
         Setting.Slider("Offset Y", ref OffsetY, -100, 100, "Pixels from the corner, positive moves the tag down");
         Setting.Slider("Map screen offset X", ref MapRewardOffsetX, -100, 100, "Pixels from the corner on the Netherrealm map screen rewards and drops, positive moves the tag right", id: "MapRewardOffsetX");
         Setting.Slider("Map screen offset Y", ref MapRewardOffsetY, -100, 100, "Pixels from the corner on the Netherrealm map screen rewards and drops, positive moves the tag down", id: "MapRewardOffsetY");
+        Setting.Slider("Boss screen offset X", ref BossRewardOffsetX, -100, 100, "Pixels from the corner on the boss rewards screen, positive moves the tag right", id: "BossRewardOffsetX");
+        Setting.Slider("Boss screen offset Y", ref BossRewardOffsetY, -100, 100, "Pixels from the corner on the boss rewards screen, positive moves the tag down", id: "BossRewardOffsetY");
         Setting.Style("Text", Text, "Colour, size, background and shadow of the tag");
         Setting.Checkbox("Show FE icon", ref ShowIcon, "The FE icon in front of the number - needs the game icons from Setup");
         Setting.Checkbox("Grey gear", ref ShowGrey, "Price tags on grey frame gear (normal)");

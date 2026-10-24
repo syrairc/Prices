@@ -721,13 +721,18 @@ public sealed class Main : Plugin<Settings>
     {
         if (!Settings.Enabled || Game.State.MapReward is not { } view) return;
         var icon = TagIcon(out var hasIcon);
+        var offset = RewardOffset(view);
         foreach (var reward in view.Items)
         {
-            var item = new InventoryItem(InventoryBag.Commodities, 0, "", reward.BaseId, 0, 0, 0, reward.Count, 0, 0);
-            if (Settings.TooCheap(item, Tags.Value(item, _prices)) || TagFor(reward.BaseId, reward.Count, false) is not { } text) continue;
-            DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, reward.Min, reward.Max, size) + new Vector2(Settings.MapRewardOffsetX, Settings.MapRewardOffsetY));
+            var legendary = reward.SpecialId != 0;
+            var item = new InventoryItem(legendary ? InventoryBag.Equipment : InventoryBag.Commodities, 0, "", reward.BaseId, 0, 0, 0, reward.Count, 0, 0) { SpecialId = reward.SpecialId, Unidentified = legendary };
+            var text = legendary ? TagFor(reward.BaseId, reward.Count, true, reward.SpecialId, true, [], []) : TagFor(reward.BaseId, reward.Count, false);
+            if (Settings.TooCheap(item, Tags.Value(item, _prices, legendary ? Legendary : null)) || text is null) continue;
+            DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, reward.Min, reward.Max, size) + offset);
         }
     }
+
+    internal Vector2 RewardOffset(MapRewardView view) => view.Boss ? new Vector2(Settings.BossRewardOffsetX, Settings.BossRewardOffsetY) : new Vector2(Settings.MapRewardOffsetX, Settings.MapRewardOffsetY);
 
     void DrawTags(IReadOnlyList<InventoryItem> items, Vector2 clipMin, Vector2 clipMax, BagCell[] cells, Func<InventoryItem, bool> onTab)
     {
