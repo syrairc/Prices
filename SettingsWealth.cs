@@ -25,8 +25,8 @@ public sealed partial class Settings
         if (WealthStatus is { } status)
             foreach (var line in status()) ImGui.TextDisabled(line);
         if (ImGui.Button("Reset##wealth")) ImGui.OpenPopup("Reset wealth data");
-        EmberHUD.Ui.Text.Tip("Erases the saved runs, totals and stash tabs of the current character and season, and the run in progress");
-        Layout.ConfirmModal("Reset wealth data", "Erase the saved runs, totals and stash tabs of this character and season?", out var confirmed);
+        EmberHUD.Ui.Text.Tip("Erases the saved runs, totals and stash tabs of the current season, and the run in progress");
+        Layout.ConfirmModal("Reset wealth data", "Erase the saved runs, totals and stash tabs of this season?", out var confirmed);
         if (confirmed) WealthReset?.Invoke();
         ImGui.SameLine();
         if (ImGui.Button("Open dashboard##wealth") && WealthOpen is { } open) WealthResult = open();
