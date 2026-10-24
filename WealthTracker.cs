@@ -20,6 +20,8 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     int? lastTab;
     DateTimeOffset lastTabAt;
 
+    public ProfitSession Session { get; } = new(now);
+
     public Func<string, WealthStore> Open { get; set; } = _ => new WealthStore();
 
     public string? Key { get; private set; }
@@ -96,7 +98,11 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         var snapshot = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
         store.AddSnapshot(snapshot, stored is null ? [] : [stored], Names(snapshot, store), Icons(snapshot, store));
         lastLive = snapshot.Lines;
-        if (runs.OnSnapshot(snapshot, prices) is { } run) store.AddRun(run);
+        if (runs.OnSnapshot(snapshot, prices) is { } run)
+        {
+            store.AddRun(run);
+            Session.Add(run);
+        }
         store.SetOpen(runs.Open);
         (Last, lastArea, lastSnapshotAt) = (snapshot, (state.AreaId, area.Name), at);
         return true;
@@ -106,6 +112,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     {
         Store?.Clear();
         runs.Reset();
+        Session.Restart();
         (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
     }
 
@@ -125,6 +132,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         }
         (Key, Store) = (key, back ?? Open(key));
         runs.Reset();
+        Session.Restart();
         (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
     }
 

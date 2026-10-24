@@ -172,6 +172,45 @@ public sealed class WealthTrackerTests
         Check.That(tracker.Last is null, "no last");
     }
 
+    static int SessionRuns(WealthTracker tracker) => tracker.Session.View(null, tracker.Last, [])?.Runs ?? -1;
+
+    static WealthTracker OneClosedRun(Clock clock)
+    {
+        var tracker = new WealthTracker(() => clock.At);
+        Tick(tracker, Town([Item(1, 1)]));
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 3)]));
+        return tracker;
+    }
+
+    [Test]
+    public void ClosedRunReachesTheSession()
+    {
+        var tracker = OneClosedRun(new Clock());
+        Check.Equal(1, SessionRuns(tracker));
+    }
+
+    [Test]
+    public void ResetEmptiesTheSession()
+    {
+        var tracker = OneClosedRun(new Clock());
+        tracker.Reset();
+        Tick(tracker, Town([Item(1, 3)]));
+        Check.Equal(0, SessionRuns(tracker));
+    }
+
+    [Test]
+    public void KeyChangeRestartsTheSession()
+    {
+        var clock = new Clock();
+        var tracker = OneClosedRun(clock);
+        clock.Advance(1);
+        Tick(tracker, Town([Item(1, 3)]), character: "Other");
+        Check.Equal(0, SessionRuns(tracker));
+    }
+
     [Test]
     public void ChangedPricesValueFresh()
     {
