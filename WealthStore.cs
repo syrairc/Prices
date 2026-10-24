@@ -19,7 +19,7 @@ public sealed class WealthStore
     const int MaxPrices = 60;
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    readonly object saveLock = new();
+    static readonly object saveLock = new();
 
     static ProfileData Empty => new(1, [], [], null, [], [], []);
 

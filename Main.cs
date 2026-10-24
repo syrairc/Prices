@@ -50,6 +50,10 @@ public sealed class Main : Plugin<Settings>
     readonly Overlay _overlay = new();
     readonly CompareCache _compare = new();
     int _unusedWidth, _unusedHeight;
+    WealthTracker? _wealth;
+    bool _wealthDirty;
+    long _nextWealthSaveAt;
+    string _wealthError = "";
 
     internal string DataDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Config", "Prices");
 
@@ -75,6 +79,18 @@ public sealed class Main : Plugin<Settings>
 
     internal int StashTabsSeen => _stashTabs.Count;
 
+    internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
+
+    internal Func<string?> CharacterName { get; set; } = () => null;
+
+    internal WealthTracker Wealth => _wealth ??= new WealthTracker(() => Now()) { Open = key => WealthStore.Load(WealthDirectory, key) };
+
+    internal Task? WealthSave { get; private set; }
+
+    internal string WealthDirectory => Path.Combine(DataDirectory, "Wealth");
+
+    internal string PluginDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Plugins", "Prices");
+
     public IReadOnlyDictionary<int, Price> Prices
     {
         get => _prices;
@@ -89,6 +105,8 @@ public sealed class Main : Plugin<Settings>
     {
         Settings.PurgeLocal = PurgeNow;
         (Settings.ShareFolder, Settings.ExportShare, Settings.ImportShare) = (ShareDirectory, ExportShare, ImportShare);
+        (Settings.WealthStatus, Settings.WealthReset, Settings.WealthOpen) = (WealthStatus, Wealth.Reset, OpenDashboard);
+        CopyDashboard();
         _fullKey = null;
         if (PriceSources.Cached(DataDirectory, Settings.Active, Settings.Season, LogSeason) is { } cached) Apply(cached.Synced, cached.At);
     }
@@ -96,6 +114,7 @@ public sealed class Main : Plugin<Settings>
     public override void Tick()
     {
         if (Settings.GroundEnabled) Game.WantGroundItems();
+        TrackWealth();
         Contribute();
         CollectLocal();
         if (_rebuild || ((_synced is not null || _local is not null) && _builtKey != BuildKey))
@@ -131,13 +150,112 @@ public sealed class Main : Plugin<Settings>
     {
         StopContributing();
         FlushBook();
+        FlushWealth();
     }
 
     public override void Dispose()
     {
         StopContributing();
         FlushBook();
+        FlushWealth();
         _http?.Dispose();
+    }
+
+    void TrackWealth()
+    {
+        if (!(Settings.Enabled && Settings.TrackWealth)) return;
+        Game.WantInventory();
+        Wealth.Paused = Settings.WealthPaused;
+        if (Wealth.Tick(Game.State, _prices, FileSeason(), Settings.SnapshotMinutes, CharacterName())) _wealthDirty = true;
+        var retired = Wealth.Retired;
+        if ((retired is null && !(_wealthDirty && Clock() >= _nextWealthSaveAt)) || WealthSave is { IsCompleted: false }) return;
+        Wealth.Retired = null;
+        _wealthDirty = false;
+        _nextWealthSaveAt = Clock() + 5000;
+        var (directory, current, key) = (WealthDirectory, Wealth.Store, Wealth.Key);
+        WealthSave = Task.Run(() => SaveWealth(directory, retired, current, key));
+    }
+
+    void SaveWealth(string directory, (string Key, WealthStore Store)? retired, WealthStore? current, string? key)
+    {
+        try
+        {
+            retired?.Store.Save(directory, retired.Value.Key);
+            if (current is not null && key is not null) current.Save(directory, key);
+            _wealthError = "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _wealthError = "save failed: " + ex.Message;
+            _wealthDirty = true;
+        }
+    }
+
+    void FlushWealth()
+    {
+        try
+        {
+            WealthSave?.GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is AggregateException or TaskCanceledException)
+        {
+            // already reported by the save
+        }
+        if (_wealth is { Store: { } store, Key: { } key }) SaveWealth(WealthDirectory, null, store, key);
+    }
+
+    internal string[] WealthStatus()
+    {
+        var tracker = Wealth;
+        List<string> lines = [];
+        lines.Add(tracker.Key is { } key ? "Profile: " + key : CharacterName() is null ? "Profile: character not readable yet" : "Profile: season not known yet");
+        if (tracker.Store is { } store)
+        {
+            lines.Add(tracker.Last is { } last ? $"Last snapshot {last.At.ToLocalTime():HH:mm:ss}, bags {Fe(last.Total)} FE" : "No snapshot yet");
+            lines.Add($"{store.Data.Runs.Length} runs recorded, {store.Data.Tabs.Length} stash tabs seen");
+            lines.Add("Stash tabs show as last seen - open a tab in game to refresh it");
+        }
+        if (_wealthError.Length > 0) lines.Add(_wealthError);
+        return [.. lines];
+    }
+
+    internal string OpenDashboard()
+    {
+        var page = Path.Combine(WealthDirectory, "index.html");
+        if (!File.Exists(page)) return "Dashboard not found - " + page;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(page) { UseShellExecute = true });
+            return "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            return "Could not open the dashboard: " + ex.Message;
+        }
+    }
+
+    internal void CopyDashboard()
+    {
+        var source = Path.Combine(PluginDirectory, "dashboard");
+        var target = WealthDirectory;
+        try
+        {
+            if (Directory.Exists(source))
+                foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+                {
+                    var to = Path.Combine(target, Path.GetRelativePath(source, file));
+                    if (File.Exists(to) && File.GetLastWriteTimeUtc(to) >= File.GetLastWriteTimeUtc(file)) continue;
+                    Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                    File.Copy(file, to, true);
+                }
+            var icons = Path.Combine(AppContext.BaseDirectory, "GameIcons");
+            if (Directory.Exists(icons) && Directory.Exists(target))
+                File.WriteAllText(Path.Combine(target, "wealth-icons.js"), $"window.WEALTH_ICON_DIR = {System.Text.Json.JsonSerializer.Serialize(icons)};");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _wealthError = "dashboard copy failed: " + ex.Message;
+        }
     }
 
     void Contribute()
@@ -245,7 +363,7 @@ public sealed class Main : Plugin<Settings>
         return PriceSources.Combine(Settings.Active.Where(tables.ContainsKey).Select(source => tables[source]), Settings.MinSamples, notBefore);
     }
 
-    int? FileSeason() => _heldSeason ?? LogSeason ?? (Settings.Season > 0 ? Settings.Season : null);
+    internal int? FileSeason() => _heldSeason ?? LogSeason ?? (Settings.Season > 0 ? Settings.Season : null);
 
     void CollectLocal()
     {

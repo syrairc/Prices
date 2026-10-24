@@ -1,0 +1,207 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using EmberHUD;
+using EmberHUD.Testing;
+
+namespace Prices;
+
+public sealed class WealthTrackerTests
+{
+    static readonly DateTimeOffset T0 = new(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+    static readonly Dictionary<int, Price> Prices = new() { [1] = new Price(10, null, null), [2] = new Price(4, null, null) };
+
+    sealed class Clock
+    {
+        public DateTimeOffset At = T0;
+        public void Advance(double seconds) => At = At.AddSeconds(seconds);
+    }
+
+    static (WealthTracker Tracker, Clock Clock) Make()
+    {
+        var clock = new Clock();
+        var tracker = new WealthTracker(() => clock.At) { Open = _ => new WealthStore() };
+        return (tracker, clock);
+    }
+
+    static InventoryItem Item(int baseId, int count, int slot = 0) => new(InventoryBag.Commodities, slot, "id", baseId, 0, 0, 0, count, 100, 0);
+
+    static GameState Map(InventoryItem[]? bag, int areaId = 10, string name = "Map A") =>
+        GameState.Empty with { AreaId = areaId, Area = new MapInfo(name, 1, null, null, false, [], []), Inventory = bag };
+
+    static GameState Town(InventoryItem[]? bag) =>
+        GameState.Empty with { AreaId = 1, Area = new MapInfo("Town", 1, null, null, true, [], []), Inventory = bag };
+
+    static GameState WithStash(GameState state, int tab, InventoryItem[]? items) =>
+        state with { Stash = new StashView(tab, default, default, []), StashItems = items };
+
+    static bool Tick(WealthTracker tracker, GameState state, int minutes = 5, string? character = "Hero", int? season = 12, IReadOnlyDictionary<int, Price>? prices = null) =>
+        tracker.Tick(state, prices ?? Prices, season, minutes, character);
+
+    [Test]
+    public void AreaChangeTakesSnapshot()
+    {
+        var (tracker, clock) = Make();
+        Check.That(Tick(tracker, Map([Item(1, 2), Item(2, 1)])), "first snapshot");
+        clock.Advance(60);
+        Check.That(Tick(tracker, Town([Item(1, 2), Item(2, 1)])), "area change");
+        Check.Equal(1, tracker.Store!.Data.Runs.Length);
+        Check.Equal(2, tracker.Store.Data.Totals.Length);
+        Check.Equal("Hero-12", tracker.Key);
+    }
+
+    [Test]
+    public void NullInventoryWritesNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map(null)), "false");
+        Check.That(tracker.Store is null || tracker.Store.Data.Totals.Length == 0, "nothing stored");
+    }
+
+    [Test]
+    public void NullAreaWritesNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map([Item(1, 1)]) with { Area = null }), "false");
+        Check.That(tracker.Store is null || tracker.Store.Data.Totals.Length == 0, "nothing stored");
+    }
+
+    [Test]
+    public void UnknownCharacterWritesNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map([Item(1, 1)]), character: null), "null");
+        Check.That(!Tick(tracker, Map([Item(1, 1)]), character: ""), "empty");
+        Check.That(tracker.Store is null, "no store");
+    }
+
+    [Test]
+    public void UnknownSeasonWritesNothing()
+    {
+        var (tracker, _) = Make();
+        Check.That(!Tick(tracker, Map([Item(1, 1)]), season: null), "false");
+        Check.That(tracker.Store is null, "no store");
+    }
+
+    [Test]
+    public void TimerSnapshotAfterInterval()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(60);
+        Check.That(!Tick(tracker, Map([Item(1, 1)])), "one minute is too soon");
+        clock.Advance(6 * 60);
+        Check.That(Tick(tracker, Map([Item(1, 1)])), "six minutes");
+        Check.Equal(2, tracker.Store!.Data.Totals.Length);
+    }
+
+    [Test]
+    public void StashTabIsStoredWhenSeen()
+    {
+        var (tracker, _) = Make();
+        Check.That(Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 3)])), "stored");
+        var tab = tracker.Store!.Data.Tabs.Single();
+        Check.Equal(1, tab.Index);
+        Check.Equal(2, tab.Lines.Single().BaseId);
+        Check.Equal(10f + 12f, tracker.Store.Data.Totals[^1].Total);
+    }
+
+    [Test]
+    public void BadStashReadKeepsLastGoodTab()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 3)]));
+        clock.Advance(10);
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 1, null));
+        Check.Equal(3, tracker.Store!.Data.Tabs.Single().Lines.Single().Count);
+    }
+
+    [Test]
+    public void TabSeenEmptyIsStoredEmpty()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 1, [Item(2, 3)]));
+        clock.Advance(10);
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 1, []));
+        Check.Equal(0, tracker.Store!.Data.Tabs.Single().Lines.Length);
+    }
+
+    [Test]
+    public void CharacterChangeClosesRunWithoutDiff()
+    {
+        var (tracker, clock) = Make();
+        WealthStore? first = null;
+        Tick(tracker, Town([Item(1, 5)]));
+        Tick(tracker, Map([Item(1, 5)]));
+        first = tracker.Store;
+        clock.Advance(120);
+        Check.That(Tick(tracker, Map([Item(1, 1)]), character: "Other"), "snapshot for B");
+        Check.Equal("Other-12", tracker.Key);
+        Check.Equal(0, first!.Data.Runs.Length);
+        Check.Equal(0, tracker.Store!.Data.Runs.Length);
+        Check.That(tracker.Retired is { Key: "Hero-12" }, "old store handed over to be saved");
+        Check.That(tracker.CurrentRun is not null, "B's run starts partial");
+        Check.That(tracker.CurrentRun!.Partial, "partial");
+    }
+
+    [Test]
+    public void PausedWritesNothing()
+    {
+        var (tracker, _) = Make();
+        tracker.Paused = true;
+        Check.That(!Tick(tracker, Map([Item(1, 1)])), "false");
+        Check.That(tracker.Store is null, "no store");
+    }
+
+    [Test]
+    public void ResetClearsStoreAndOpenRun()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 1)]));
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 3)]));
+        Check.Equal(1, tracker.Store!.Data.Runs.Length);
+        Tick(tracker, Map([Item(1, 3)]));
+        Check.That(tracker.CurrentRun is not null, "run open");
+        tracker.Reset();
+        Check.Equal(0, tracker.Store.Data.Runs.Length);
+        Check.Equal(0, tracker.Store.Data.Totals.Length);
+        Check.That(tracker.CurrentRun is null, "run closed");
+        Check.That(tracker.Last is null, "no last");
+    }
+
+    [Test]
+    public void ChangedPricesValueFresh()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Map([Item(1, 1)]));
+        Check.Equal(10f, tracker.Last!.Total);
+        clock.Advance(6 * 60);
+        Tick(tracker, Map([Item(1, 1)]), prices: new Dictionary<int, Price> { [1] = new Price(50, null, null) });
+        Check.Equal(50f, tracker.Last!.Total);
+    }
+
+    [Test]
+    public void LeavingTownTakesSnapshot()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 5)]));
+        clock.Advance(30);
+        Check.That(Tick(tracker, Map([Item(1, 4)])), "leaving town snapshots");
+        Check.That(!tracker.Last!.InTown, "last is the map");
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 4)]));
+        var run = tracker.Store!.Data.Runs.Single();
+        Check.Equal(-1, run.Costs.Single().Count);
+    }
+
+    [Test]
+    public void NamesComeFromTheLoc()
+    {
+        var (tracker, _) = Make();
+        Tick(tracker, Map([Item(1, 1)]));
+        Check.That(tracker.Store!.Data.Names.Count == 0 || tracker.Store.Data.Names.Values.All(name => name.Length > 0), "only real names");
+    }
+}

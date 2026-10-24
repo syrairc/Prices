@@ -292,6 +292,7 @@ public sealed partial class Settings : PluginSettings
         DrawSources();
         Setting.Checkbox("Share Exchange prices", ref Contribute, "Reads the game log (Settings > Other > Enable Log) and sends the prices of your Exchange searches to TITrack's price server, the same way TITrack does. Off = nothing is read or sent");
         if (Contribute && ContributeStatus.Length > 0) ImGui.TextDisabled(ContributeStatus);
+        DrawWealth();
     }
 
     int _selectedSource;

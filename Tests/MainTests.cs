@@ -269,4 +269,76 @@ public sealed class MainTests
         Check.That(TestFrame.Vertices(new Settings().Draw, inWindow: true) > 0, "settings page draws");
         Check.That(TestFrame.Vertices(new Settings().DrawGround, inWindow: true) > 0, "ground tab draws");
     }
+
+    sealed class Silent : System.Net.Http.HttpMessageHandler
+    {
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken) => new System.Threading.Tasks.TaskCompletionSource<System.Net.Http.HttpResponseMessage>().Task;
+    }
+
+    static Main WealthPlugin(string? character = "Hero")
+    {
+        var plugin = new Main { DataDirectory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "prices-main-" + System.Guid.NewGuid().ToString("N")), Http = new System.Net.Http.HttpClient(new Silent()), Prices = new Dictionary<int, Price> { [1] = new(8, null, null) } };
+        plugin.Settings.Season = 1601;
+        plugin.Settings.GroundEnabled = false;
+        plugin.CharacterName = () => character;
+        return plugin;
+    }
+
+    [Test]
+    public void WealthCallsWantInventoryEveryTick()
+    {
+        var plugin = WealthPlugin();
+        TestGame.Set(GameState.Empty with { Ui = GameUi.Empty });
+        Check.That(TestGame.InventoryAskedDuring(plugin.Tick), "asked with the bag closed");
+        plugin.Settings.TrackWealth = false;
+        Check.That(!TestGame.InventoryAskedDuring(plugin.Tick), "not asked while off");
+    }
+
+    [Test]
+    public void WealthSavesOffTheTickThread()
+    {
+        var plugin = WealthPlugin();
+        TestGame.Set(GameState.Empty with { AreaId = 5, Area = new MapInfo("Map A", 1, null, null, false, [], []), Inventory = [Item(0, 1)] });
+        plugin.Tick();
+        Check.That(plugin.WealthSave is not null, "save task started");
+        plugin.WealthSave!.GetAwaiter().GetResult();
+        var directory = System.IO.Path.Combine(plugin.DataDirectory, "Wealth");
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(directory, "Hero-1601.json")), "data file");
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(directory, "wealth-index.js")), "index");
+    }
+
+    [Test]
+    public void WealthStatusSaysWhyNothingRecords()
+    {
+        var plugin = WealthPlugin(character: null);
+        Check.That(string.Join("\n", plugin.WealthStatus()).Contains("character not readable yet"), "character line");
+    }
+
+    [Test]
+    public void OpenDashboardSaysSoWhenItIsMissing()
+    {
+        var plugin = WealthPlugin();
+        Check.That(plugin.OpenDashboard().Contains("not found"), "no throw, says so");
+    }
+
+    [Test]
+    public void DashboardCopyTakesNewerFilesAndToleratesNoSource()
+    {
+        var plugin = WealthPlugin();
+        plugin.PluginDirectory = System.IO.Path.Combine(plugin.DataDirectory, "nothing-here");
+        plugin.CopyDashboard();
+        var source = System.IO.Path.Combine(plugin.DataDirectory, "plugin", "dashboard");
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(source, "vendor"));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(source, "index.html"), "one");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(source, "vendor", "react.js"), "r");
+        plugin.PluginDirectory = System.IO.Path.Combine(plugin.DataDirectory, "plugin");
+        plugin.CopyDashboard();
+        var target = System.IO.Path.Combine(plugin.DataDirectory, "Wealth");
+        Check.Equal("one", System.IO.File.ReadAllText(System.IO.Path.Combine(target, "index.html")));
+        Check.That(System.IO.File.Exists(System.IO.Path.Combine(target, "vendor", "react.js")), "vendor copied");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(source, "index.html"), "two");
+        System.IO.File.SetLastWriteTimeUtc(System.IO.Path.Combine(source, "index.html"), System.DateTime.UtcNow.AddMinutes(5));
+        plugin.CopyDashboard();
+        Check.Equal("two", System.IO.File.ReadAllText(System.IO.Path.Combine(target, "index.html")));
+    }
 }
