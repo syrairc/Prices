@@ -81,7 +81,9 @@ public sealed class Main : Plugin<Settings>
 
     internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
 
-    internal Func<string?> CharacterName { get; set; } = () => null;
+    internal Func<string?> CharacterName { get; set; } = () => PlausibleName(Game.State.Player?.Name);
+
+    internal static string? PlausibleName(string? name) => name is { Length: > 0 and <= 64 } && name.Trim() == name && !name.Any(char.IsControl) ? name : null;
 
     internal WealthTracker Wealth => _wealth ??= new WealthTracker(() => Now()) { Open = key => WealthStore.Load(WealthDirectory, key) };
 

@@ -369,6 +369,17 @@ public sealed class MainTests
     }
 
     [Test]
+    public void OnlyCleanCharacterNamesAreUsed()
+    {
+        Check.That(Main.PlausibleName("Terayen#8674") == "Terayen#8674", "clean name");
+        Check.That(Main.PlausibleName(null) is null, "null");
+        Check.That(Main.PlausibleName("") is null, "empty");
+        Check.That(Main.PlausibleName(" padded ") is null, "padded");
+        Check.That(Main.PlausibleName("badname") is null, "control char");
+        Check.That(Main.PlausibleName(new string('a', 65)) is null, "too long");
+    }
+
+    [Test]
     public void OpenDashboardSaysSoWhenItIsMissing()
     {
         using var test = new Wealthy();
