@@ -3,8 +3,8 @@
   "Corner": "TopLeft",
   "OffsetX": 6,
   "OffsetY": 8,
-  "MapRewardOffsetX": 0,
-  "MapRewardOffsetY": 0,
+  "MapRewardOffsetX": -10,
+  "MapRewardOffsetY": -10,
   "Text": {
     "Scale": 1,
     "Face": "Regular",
