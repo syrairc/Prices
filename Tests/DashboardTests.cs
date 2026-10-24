@@ -28,6 +28,7 @@ public sealed class DashboardTests
         Check.That(Array.IndexOf(scripts, "wealth-index.js") is var index and >= 0 && index < app);
         Check.That(Array.IndexOf(scripts, "wealth-icons.js") is var icons and >= 0 && icons < app);
         Check.That(Array.IndexOf(scripts, "vendor/htm.js") is var htm and >= 0 && htm < app);
+        Check.That(Array.IndexOf(scripts, "wealth.js") is var wealth and >= 0 && wealth < app && wealth > Array.IndexOf(scripts, "charts.js"));
         Check.That(Array.IndexOf(scripts, "vendor/react-dom.production.min.js") > Array.IndexOf(scripts, "vendor/react.production.min.js"));
     }
 
@@ -141,6 +142,101 @@ public sealed class DashboardTests
                 Check.Equal(expectedDiff[i].Count, diff[i].GetProperty("count").GetInt32());
                 Near(expectedDiff[i].Value, diff[i].GetProperty("value").GetDouble());
             }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void WealthScreenReadsTabKeys()
+    {
+        var json = JsonSerializer.Serialize(SampleWealth.Profile(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var js = Text("wealth.js");
+        void Has(JsonElement element, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                Check.That(element.TryGetProperty(key, out _), "json " + key);
+                Check.That(Regex.IsMatch(js, @"\." + key + @"\b|\b" + key + @"\s*:"), "wealth.js " + key);
+            }
+        }
+        Has(root, "tabs", "bag", "totals");
+        Has(root.GetProperty("tabs")[0], "index", "seenAt", "lines");
+        Has(root.GetProperty("totals")[0], "at", "bags", "stash", "total");
+        Check.That(js.Contains("window.WealthScreen"));
+    }
+
+    [Test]
+    public void SampleHasStaleTab()
+    {
+        var data = SampleWealth.Profile();
+        Check.Equal(4, data.Tabs.Length);
+        var stale = data.Tabs.Where(t => SampleWealth.Now - t.SeenAt > TimeSpan.FromDays(1)).ToArray();
+        Check.Equal(1, stale.Length);
+        Check.Equal(SampleWealth.StaleTab, stale[0].Index);
+        Check.Equal(SampleWealth.StaleSeenAt, stale[0].SeenAt);
+        Check.That(data.Tabs.SelectMany(t => t.Lines).Any(l => l.BaseId == SampleWealth.Unpriced && l.Unit == 0));
+        Check.That(data.Names.ContainsKey(SampleWealth.Unpriced));
+    }
+
+    [Test]
+    public void WealthMathMatchesTheSample()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "prices-dash-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            SampleWealth.Write(directory, Dashboard(), SampleWealth.Begin);
+            var later = SampleWealth.Now.AddDays(3);
+            var script = "const m=require(process.argv[1]);const d=JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));" +
+                "const now=Date.parse(process.argv[3]);const rows=m.buildRows(d);" +
+                "const ex=new Set([rows[0].key]);const all=m.summarise(rows,new Set());const some=m.summarise(rows,ex);" +
+                "console.log(JSON.stringify({rows:rows.length,keys:new Set(rows.map(r=>r.key)).size,all,some,first:rows[0].value," +
+                "stale:d.tabs.filter(t=>m.isStale(t.seenAt,Date.parse(process.argv[4]))).map(t=>t.index),week:m.recent(d.totals,now).length," +
+                "divine:m.findDivine(d),tabName:[m.tabName(m.BAGS),m.tabName(0),m.tabName(3)],ago:[m.ago(30000),m.ago(5*60000),m.ago(3*3600000),m.ago(50*3600000)]," +
+                "slices:m.breakdown(rows,new Set(),3).map(s=>s.value)}));";
+            var info = new ProcessStartInfo("node") { RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, UseShellExecute = false };
+            foreach (var arg in new[] { "-e", script, Path.Combine(directory, "wealth.js"), Path.Combine(directory, SampleWealth.Key + ".json"), later.ToString("O"), SampleWealth.Now.ToString("O") }) info.ArgumentList.Add(arg);
+            string output;
+            var errors = new System.Text.StringBuilder();
+            try
+            {
+                using var process = Process.Start(info)!;
+                process.ErrorDataReceived += (_, e) => errors.AppendLine(e.Data);
+                process.BeginErrorReadLine();
+                output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                Check.Equal(0, process.ExitCode, errors.ToString());
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Console.WriteLine("WealthMathMatchesTheSample skipped: node not found");
+                return;
+            }
+            var result = JsonDocument.Parse(output).RootElement;
+            var data = SampleWealth.Profile();
+            var lines = data.Bag!.Lines.Concat(data.Tabs.SelectMany(t => t.Lines)).ToArray();
+            Check.Equal(lines.Length, result.GetProperty("rows").GetInt32());
+            Check.Equal(lines.Length, result.GetProperty("keys").GetInt32());
+            Near(lines.Sum(l => l.Value), result.GetProperty("all").GetProperty("total").GetDouble());
+            Check.Equal(lines.Count(l => l.Unit == 0 && l.BaseId != Valuation.FeBaseId), result.GetProperty("all").GetProperty("unpriced").GetInt32());
+            Check.That(result.GetProperty("all").GetProperty("unpriced").GetInt32() >= 1);
+            var first = result.GetProperty("first").GetDouble();
+            Near((float)(result.GetProperty("all").GetProperty("total").GetDouble() - first), result.GetProperty("some").GetProperty("total").GetDouble());
+            Check.Equal(lines.Length - 1, result.GetProperty("some").GetProperty("included").GetInt32());
+            Check.Equal(SampleWealth.StaleTab, result.GetProperty("stale").EnumerateArray().Single().GetInt32());
+            Check.Equal(data.Totals.Count(p => p.At >= later.AddDays(-7)), result.GetProperty("week").GetInt32());
+            Check.That(result.GetProperty("week").GetInt32() is > 0 and < 3000);
+            Near(data.Bag.Lines.First(l => l.BaseId == 1).Unit, result.GetProperty("divine").GetDouble());
+            Check.Equal("Bags|Stash 1|Stash 4", string.Join('|', result.GetProperty("tabName").EnumerateArray().Select(e => e.GetString())));
+            Check.Equal("just now|5m ago|3h ago|2d ago", string.Join('|', result.GetProperty("ago").EnumerateArray().Select(e => e.GetString())));
+            var slices = result.GetProperty("slices").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            Check.Equal(4, slices.Length);
+            Check.That(slices[0] >= slices[1] && slices[1] >= slices[2]);
+            Near(lines.Sum(l => l.Value), slices.Sum());
         }
         finally
         {

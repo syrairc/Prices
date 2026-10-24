@@ -378,7 +378,7 @@
         ${index.length === 0 && html`<div className="empty big">No data yet. Start the game with the Prices plugin on and it appears here.</div>`}
         ${index.length > 0 && !data && html`<div className="empty big">Loading...</div>`}
         ${data && screen === 'runs' && html`<${RunsScreen} data=${data} eco=${eco} setEco=${setEco} now=${now} stale=${stale} />`}
-        ${data && screen === 'wealth' && (Wealth ? html`<${Wealth} data=${data} eco=${eco} now=${now} />` : html`<div className="empty big">Wealth screen is not installed yet.</div>`)}
+        ${data && screen === 'wealth' && (Wealth ? html`<${Wealth} data=${data} now=${now} ui=${{ NameCell, Tile, num, stored, store }} />` : html`<div className="empty big">Wealth screen is not installed yet.</div>`)}
         ${gear && html`<${Options} eco=${eco} setEco=${setEco} onClose=${() => setGear(false)} />`}
       </div>`;
   }

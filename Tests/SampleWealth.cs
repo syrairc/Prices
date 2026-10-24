@@ -11,6 +11,9 @@ public static class SampleWealth
     public const int Fe = Valuation.FeBaseId;
     public static readonly DateTimeOffset Begin = new(2026, 10, 18, 10, 0, 0, TimeSpan.Zero);
     public static readonly DateTimeOffset Now = Until(Begin);
+    public const int Unpriced = 13;
+    public const int StaleTab = 3;
+    public static readonly DateTimeOffset StaleSeenAt = Begin.AddMinutes(3000 * 3 - 2 * 24 * 60);
 
     static DateTimeOffset Until(DateTimeOffset begin) => begin.AddMinutes(200 * 45 + 20);
 
@@ -22,7 +25,7 @@ public static class SampleWealth
         new(true, true, true),
     ];
 
-    static readonly string[] Names = ["", "Divine Orb", "Chaos Orb", "Compass of Echoes", "Beacon of Ruin", "Ember Core", "Frost Shard", "Void Idol", "Silver Coin", "Ancient Key", "Gilded Fang", "Glass Dial", "Mirror Shard"];
+    static readonly string[] Names = ["", "Divine Orb", "Chaos Orb", "Compass of Echoes", "Beacon of Ruin", "Ember Core", "Frost Shard", "Void Idol", "Silver Coin", "Ancient Key", "Gilded Fang", "Glass Dial", "Mirror Shard", "Mystery Relic"];
     static readonly string[] Maps = ["Ashen Hollow", "Drowned Gate", "Vault of Glass", "Cinder Reach", "Nightmare Marrow", "Pale Cistern"];
 
     static float Price(int baseId, int step)
@@ -32,7 +35,7 @@ public static class SampleWealth
         return MathF.Round(basePrice * (1 + 0.25f * MathF.Sin(step / 40f + baseId)), 2);
     }
 
-    static Line Make(int baseId, int count, int step) => new(baseId, count, Price(baseId, step), count * Price(baseId, step));
+    static Line Make(int baseId, int count, int step) => baseId == Unpriced ? new(baseId, count, 0, 0) : new(baseId, count, Price(baseId, step), count * Price(baseId, step));
 
     static Snapshot Snap(DateTimeOffset at, bool town, string area, params Line[] lines) =>
         new(at, town ? 1 : 10 + Array.IndexOf(Maps, area), area, town, lines.Sum(l => l.Value), lines.Where(l => l.BaseId == Fe).Sum(l => l.Value), 0, lines);
@@ -52,7 +55,7 @@ public static class SampleWealth
         var now = Until(begin);
         var rng = new Random(7);
         var store = new WealthStore();
-        var names = Enumerable.Range(1, 12).ToDictionary(i => i, i => Names[i]);
+        var names = Enumerable.Range(1, 13).ToDictionary(i => i, i => Names[i]);
         names[Fe] = "Flame Elementium";
         var fe = 5000;
         for (var i = 0; i < 3000; i++)
@@ -85,7 +88,7 @@ public static class SampleWealth
     }
 
     static StashTab[] Tabs(DateTimeOffset begin, int step) =>
-        Enumerable.Range(0, 4).Select(t => new StashTab(t, begin.AddMinutes(3000 * 3 - t * 90), Enumerable.Range(1, 12).Where(id => id % 4 == t).Select(id => Make(id, 3 + id, step)).ToArray())).ToArray();
+        Enumerable.Range(0, 4).Select(t => new StashTab(t, t == StaleTab ? begin.AddMinutes(3000 * 3 - 2 * 24 * 60) : begin.AddMinutes(3000 * 3 - t * 90), Enumerable.Range(1, 13).Where(id => id % 4 == t).Select(id => Make(id, 3 + id, step)).ToArray())).ToArray();
 
     public static string Write(string directory, string dashboard, DateTimeOffset? begin = null)
     {
