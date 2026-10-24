@@ -32,7 +32,7 @@ internal sealed class ProfitOverlay
     [
         new("Session", view is null ? "-" : $"{Duration(view.Time)}, {view.Runs} runs", ProfitTone.Plain, false),
         new("", "", ProfitTone.Plain, false, true),
-        Signed("This map", view?.ThisMap, false),
+        Signed("This map", view?.ThisMap, view?.ThisMapUnpriced ?? false),
         Signed("Last map", view?.LastMap, view?.Unpriced ?? false),
         Signed("Profit / map", view?.PerMap, view?.Unpriced ?? false),
         Signed("Profit / hr", view?.PerHour, view?.Unpriced ?? false),
@@ -44,16 +44,20 @@ internal sealed class ProfitOverlay
 
     internal static ProfitRow[] CompactRows(ProfitView? view) =>
     [
-        Signed("/hr", view?.PerHour, view?.Unpriced ?? false),
-        Signed("/map", view?.PerMap, view?.Unpriced ?? false),
-        Wealth("Wealth", view?.Wealth)
+        Signed("/hr ", view?.PerHour, view?.Unpriced ?? false),
+        Signed("/map ", view?.PerMap, view?.Unpriced ?? false),
+        Wealth("Wealth ", view?.Wealth)
     ];
 
     internal static string Duration(TimeSpan time) =>
         time.TotalHours >= 1 ? $"{(int)time.TotalHours}h {time.Minutes}m" : $"{time.Minutes}m";
 
-    static ProfitRow Signed(string label, float? value, bool unpriced) =>
-        new(label, ProfitText.Signed(value, unpriced), value is not { } number ? ProfitTone.Plain : number < 0 ? ProfitTone.Negative : ProfitTone.Positive, true);
+    static ProfitRow Signed(string label, float? value, bool unpriced)
+    {
+        var text = ProfitText.Signed(value, unpriced);
+        var plain = value is null || text.TrimEnd('*') == "0";
+        return new(label, text, plain ? ProfitTone.Plain : value < 0 ? ProfitTone.Negative : ProfitTone.Positive, true);
+    }
 
     static ProfitRow Wealth(string label, float? value) =>
         new(label, value is { } number ? ProfitText.Plain(number) : "-", ProfitTone.Plain, true);
@@ -73,8 +77,9 @@ internal sealed class ProfitOverlay
     {
         var style = settings.ProfitFullStyle;
         var text = TextOnly(style);
-        var height = EmberHUD.Draw.MeasureText("Ag", text).Y;
-        var iconWidth = hasIcon ? height + IconGap : 0;
+        var height = EmberHUD.Draw.RowHeight(text);
+        var glyph = EmberHUD.Draw.MeasureText("Ag", text).Y;
+        var iconWidth = hasIcon ? glyph + IconGap : 0;
         float widest = 0, total = 0;
         foreach (var row in _fullRows)
         {
@@ -103,11 +108,9 @@ internal sealed class ProfitOverlay
             }
             text.Color = style.Color;
             EmberHUD.Draw.Text(row.Label, new Vector2(origin.X + PadX, y), text);
-            var valueWidth = EmberHUD.Draw.MeasureText(row.Value, text).X;
-            var at = right - valueWidth - (row.Fe ? iconWidth : 0);
             text.Color = ToneColor(row.Tone, style);
-            EmberHUD.Draw.Text(row.Value, new Vector2(at, y), text);
-            if (row.Fe && hasIcon) EmberHUD.Draw.Image(icon, new Vector2(right - height, y), new Vector2(right, y + height));
+            EmberHUD.Draw.Text(row.Value, new Vector2(right - (row.Fe ? iconWidth : 0), y), text, Align.Right);
+            if (row.Fe && hasIcon) EmberHUD.Draw.Image(icon, new Vector2(right - glyph, y), new Vector2(right, y + glyph));
             y += height;
         }
     }
@@ -123,7 +126,7 @@ internal sealed class ProfitOverlay
         for (var i = 0; i < _compactRows.Length; i++)
         {
             var row = _compactRows[i];
-            width += EmberHUD.Draw.MeasureText(row.Label + " " + row.Value, text).X + (row.Fe ? iconWidth : 0) + (i > 0 ? gap : 0);
+            width += EmberHUD.Draw.MeasureText(row.Label, text).X + EmberHUD.Draw.MeasureText(row.Value, text).X + (row.Fe ? iconWidth : 0) + (i > 0 ? gap : 0);
         }
         var size = new Vector2(width + PadX * 2, height + PadY * 2);
         var origin = Place(_compact, settings, "prices-profit-compact", size, ref settings.ProfitCompactX, ref settings.ProfitCompactY);

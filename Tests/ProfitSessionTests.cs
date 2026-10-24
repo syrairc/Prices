@@ -75,6 +75,8 @@ public sealed class ProfitSessionTests
         var open = MakeRun(0, 30, 40, [new Line(2, -1, 10, -10)]);
         Check.Equal(40f, session.View(open, Last(), [])!.ThisMap!.Value);
         Check.That(Make(0).View(MakeRun(-10, 5, 40), Last(), [])!.ThisMap is null, "open run from before the session");
+        Check.That(!session.View(open, Last(), [])!.ThisMapUnpriced, "priced open run");
+        Check.That(session.View(MakeRun(0, 30, 40, unpriced: true), Last(), [])!.ThisMapUnpriced, "unpriced open run");
     }
 
     [Test]

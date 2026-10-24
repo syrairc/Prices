@@ -37,9 +37,9 @@ public sealed partial class Settings
 
     internal void DrawOverlay()
     {
-        Setting.Checkbox("Show full profit widget", ref ProfitFull, "A panel with the session profit, profit per hour, time and the loot gained, valued at the prices of the Prices tab. Needs Track wealth on", id: "ProfitFull");
+        Setting.Checkbox("Show full profit widget", ref ProfitFull, "A panel with the session stats: this map, last map, profit per map, profit per hour, session profit, total wealth and FE on hand. Needs Track wealth on", id: "ProfitFull");
         Setting.Style("Full widget text", ProfitFullStyle, "Colour, size, background and border of the full profit widget", id: "ProfitFullStyle");
-        Setting.Checkbox("Show compact profit widget", ref ProfitCompact, "A one-line widget with the session profit and profit per hour", id: "ProfitCompact");
+        Setting.Checkbox("Show compact profit widget", ref ProfitCompact, "A one-line widget with /hr, /map and total wealth", id: "ProfitCompact");
         Setting.Style("Compact widget text", ProfitCompactStyle, "Colour, size, background and border of the compact profit widget", id: "ProfitCompactStyle");
         Setting.Checkbox("Show FE icon", ref ProfitIcon, "The FE icon next to the profit numbers - needs the game icons from Setup", id: "ProfitIcon");
         Setting.Checkbox("Lock", ref ProfitLock, "The profit widgets ignore the mouse while locked - hold the move key to drag them anyway", id: "ProfitLock");

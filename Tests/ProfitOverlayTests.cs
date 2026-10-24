@@ -13,6 +13,7 @@ public sealed class ProfitOverlayTests
         var rows = ProfitOverlay.FullRows(Known);
         Check.Equal("1h 12m, 9 runs", rows[0].Value);
         Check.That(rows[1].Divider && rows[7].Divider);
+        Check.Equal("+12.4*", ProfitOverlay.FullRows(Known with { ThisMapUnpriced = true })[2].Value);
         Check.Equal("+12.4", rows[2].Value);
         Check.Equal(ProfitTone.Positive, rows[2].Tone);
         Check.Equal("-3.0*", rows[3].Value);
@@ -20,6 +21,12 @@ public sealed class ProfitOverlayTests
         Check.Equal("8.4k", rows[8].Value);
         Check.Equal(ProfitTone.Plain, rows[8].Tone);
         Check.Equal("5.0", rows[9].Value);
+    }
+
+    [Test]
+    public void ZeroProfitIsPlainColour()
+    {
+        Check.Equal(ProfitTone.Plain, ProfitOverlay.FullRows(Known with { PerMap = 0.01f })[4].Tone);
     }
 
     [Test]

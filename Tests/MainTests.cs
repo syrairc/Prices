@@ -47,6 +47,15 @@ public sealed class MainTests
     }
 
     [Test]
+    public void ProfitWidgetDrawsByDefaultAndNotWhenPaused()
+    {
+        var plugin = new Main();
+        Check.That(Vertices(plugin, GameState.Empty) > 0, "full widget draws by default");
+        plugin.Settings.WealthPaused = true;
+        Check.Equal(0, Vertices(plugin, GameState.Empty));
+    }
+
+    [Test]
     public void NoInventoryDrawsNothing()
     {
         Check.Equal(0, Vertices(Plugin(), State(3) with { Inventory = null }));

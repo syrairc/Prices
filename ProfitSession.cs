@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Prices;
 
-public sealed record ProfitView(TimeSpan Time, int Runs, float? ThisMap, float? LastMap, float? PerMap, float? PerHour, float? Profit, bool Unpriced, float Wealth, float Fe);
+public sealed record ProfitView(TimeSpan Time, int Runs, float? ThisMap, float? LastMap, float? PerMap, float? PerHour, float? Profit, bool Unpriced, float Wealth, float Fe, bool ThisMapUnpriced = false);
 
 public sealed class ProfitSession(Func<DateTimeOffset> now)
 {
@@ -53,7 +53,8 @@ public sealed class ProfitSession(Func<DateTimeOffset> now)
             any ? summary.NetWorth : null,
             closed.Any(run => run.Unpriced),
             wealth,
-            last.Fe);
+            last.Fe,
+            open is not null && open.Start >= since && open.Unpriced);
     }
 }
 
