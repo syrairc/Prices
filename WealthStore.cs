@@ -10,7 +10,7 @@ public sealed record Point(DateTimeOffset At, float Bags, float Stash, float Tot
 
 public sealed record StashTab(int Index, DateTimeOffset SeenAt, Line[] Lines);
 
-public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, float[][]> PriceHistory, Dictionary<int, string> Names);
+public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, double[][]> PriceHistory, Dictionary<int, string> Names);
 
 public sealed class WealthStore
 {
@@ -19,19 +19,22 @@ public sealed class WealthStore
     const int MaxPrices = 60;
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    readonly object saveLock = new();
+
     static ProfileData Empty => new(1, [], [], null, [], [], []);
 
     public ProfileData Data { get; private set; } = Empty;
 
     public void AddSnapshot(Snapshot bag, IReadOnlyList<StashTab> tabs, IReadOnlyDictionary<int, string> names)
     {
+        if (!float.IsFinite(bag.Total) || !float.IsFinite(bag.Fe) || !Finite(bag.Lines)) return;
         foreach (var tab in tabs) SetTab(tab);
         var stash = Data.Tabs.Sum(tab => tab.Lines.Sum(line => line.Value));
-        var history = new Dictionary<int, float[][]>(Data.PriceHistory);
+        var history = new Dictionary<int, double[][]>(Data.PriceHistory);
         var stamp = bag.At.ToUnixTimeSeconds();
         foreach (var line in bag.Lines.Concat(tabs.SelectMany(tab => tab.Lines)).GroupBy(line => line.BaseId).Select(group => group.First()))
         {
-            if (line.Unit <= 0) continue;
+            if (!float.IsFinite(line.Unit) || line.Unit <= 0) continue;
             var prices = history.GetValueOrDefault(line.BaseId) ?? [];
             if (prices.Length > 0 && prices[^1][1] == line.Unit) continue;
             history[line.BaseId] = prices.Append([stamp, line.Unit]).TakeLast(MaxPrices).ToArray();
@@ -47,19 +50,32 @@ public sealed class WealthStore
         };
     }
 
-    public void AddRun(Run run) => Data = Data with { Runs = Data.Runs.Append(run).TakeLast(MaxRuns).ToArray() };
+    public void AddRun(Run run)
+    {
+        if (!float.IsFinite(run.StartTotal) || !float.IsFinite(run.EndTotal) || !Finite(run.Loot) || !Finite(run.Costs)) return;
+        Data = Data with { Runs = Data.Runs.Append(run).TakeLast(MaxRuns).ToArray() };
+    }
 
-    public void SetTab(StashTab tab) => Data = Data with { Tabs = Data.Tabs.Where(t => t.Index != tab.Index).Append(tab).OrderBy(t => t.Index).ToArray() };
+    public void SetTab(StashTab tab)
+    {
+        if (!Finite(tab.Lines)) return;
+        Data = Data with { Tabs = Data.Tabs.Where(t => t.Index != tab.Index).Append(tab).OrderBy(t => t.Index).ToArray() };
+    }
 
     public void Clear() => Data = Empty;
 
     public void Save(string directory, string key)
     {
+        lock (saveLock) SaveLocked(directory, key);
+    }
+
+    void SaveLocked(string directory, string key)
+    {
         key = Safe(key);
         Directory.CreateDirectory(directory);
         var json = JsonSerializer.Serialize(Data, Json);
         Write(Path.Combine(directory, key + ".json"), json);
-        Write(Path.Combine(directory, $"wealth-{key}.js"), $"(window.WEALTH = window.WEALTH || {{}})[\"{key}\"] = {json};");
+        Write(Path.Combine(directory, $"wealth-{key}.js"), $"(window.WEALTH = window.WEALTH || {{}})[{JsonSerializer.Serialize(key)}] = {json};");
         WriteIndex(directory);
     }
 
@@ -68,7 +84,7 @@ public sealed class WealthStore
         var path = Path.Combine(directory, Safe(key) + ".json");
         try
         {
-            return JsonSerializer.Deserialize<ProfileData>(File.ReadAllText(path), Json) is { Runs: not null, Totals: not null, Tabs: not null, PriceHistory: not null, Names: not null } data
+            return JsonSerializer.Deserialize<ProfileData>(File.ReadAllText(path), Json) is { } data && Valid(data)
                 ? new WealthStore { Data = data }
                 : Quarantine(path);
         }
@@ -85,6 +101,17 @@ public sealed class WealthStore
             return Quarantine(path);
         }
     }
+
+    static bool Valid(ProfileData data) =>
+        data.Version == 1
+        && data.Runs is not null && data.Runs.All(run => run is { Loot: not null, Costs: not null } && run.Loot.All(line => line is not null) && run.Costs.All(line => line is not null))
+        && data.Totals is not null && data.Totals.All(point => point is not null)
+        && data.Tabs is not null && data.Tabs.All(tab => tab is { Lines: not null } && tab.Lines.All(line => line is not null))
+        && (data.Bag is null || data.Bag.Lines is not null && data.Bag.Lines.All(line => line is not null))
+        && data.PriceHistory is not null && data.PriceHistory.Values.All(pairs => pairs is not null && pairs.All(pair => pair is { Length: 2 }))
+        && data.Names is not null;
+
+    static bool Finite(Line[] lines) => lines.All(line => float.IsFinite(line.Unit) && float.IsFinite(line.Value));
 
     static WealthStore Quarantine(string path)
     {
@@ -115,7 +142,9 @@ public sealed class WealthStore
         File.Move(temp, path, true);
     }
 
-    static string Safe(string key) => string.Concat(key.Select(c => Array.IndexOf(Path.GetInvalidFileNameChars(), c) >= 0 ? '_' : c));
+    static readonly char[] Invalid = Path.GetInvalidFileNameChars();
+
+    static string Safe(string key) => string.Concat(key.Select(c => Array.IndexOf(Invalid, c) >= 0 ? '_' : c));
 
     sealed record IndexEntry(string Key, string Character, string Season);
 }

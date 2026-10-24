@@ -103,7 +103,7 @@ public sealed class WealthStoreTests
         Check.Equal(1, store.Data.PriceHistory[7].Length);
         store.AddSnapshot(Snap(2, 4, new Line(7, 1, 4, 4)), [], NoNames);
         Check.Equal(2, store.Data.PriceHistory[7].Length);
-        Check.Equal((float)Now.AddMinutes(2).ToUnixTimeSeconds(), store.Data.PriceHistory[7][1][0]);
+        Check.Equal((double)Now.AddMinutes(2).ToUnixTimeSeconds(), store.Data.PriceHistory[7][1][0]);
     }
 
     [Test]
@@ -199,6 +199,77 @@ public sealed class WealthStoreTests
             Check.That(File.Exists(Path.Combine(directory, "a_b_c_d-12.json")));
             Check.That(File.Exists(Path.Combine(directory, "wealth-a_b_c_d-12.js")));
             Check.Equal(0, WealthStore.Load(directory, "a/b:c*d-12").Data.Runs.Length);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void NonFiniteIsIgnoredAndSaveStillWorks()
+    {
+        var directory = Dir();
+        try
+        {
+            var store = new WealthStore();
+            store.AddSnapshot(Snap(0, float.NaN, new Line(1, 1, 5, 5)), [], NoNames);
+            store.AddSnapshot(Snap(1, 5, new Line(1, 1, float.NaN, 5)), [], NoNames);
+            store.AddSnapshot(Snap(2, 5, new Line(1, 1, float.PositiveInfinity, 5)), [], NoNames);
+            store.AddSnapshot(Snap(3, 5, new Line(1, 1, 5, 5)), [Tab(0, new Line(2, 1, float.NaN, float.NaN))], NoNames);
+            Check.Equal(1, store.Data.Totals.Length);
+            Check.Equal(0, store.Data.Tabs.Length);
+            Check.Equal(1, store.Data.PriceHistory[1].Length);
+            store.Save(directory, "Hero-12");
+            Check.Equal(1, WealthStore.Load(directory, "Hero-12").Data.Totals.Length);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void StructurallyBadFilesAreQuarantined()
+    {
+        var bad = new[]
+        {
+            """{"version":1,"runs":[null],"totals":[],"bag":null,"tabs":[],"priceHistory":{},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[null],"bag":null,"tabs":[],"priceHistory":{},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[null],"priceHistory":{},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[{"index":0,"seenAt":"2026-10-24T12:00:00+00:00","lines":null}],"priceHistory":{},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{"1":[[1,2,3]]},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{"1":[null]},"names":{}}""",
+            """{"version":2,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{},"names":{}}""",
+        };
+        foreach (var text in bad)
+        {
+            var directory = Dir();
+            try
+            {
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(Path.Combine(directory, "Hero-12.json"), text);
+                Check.Equal(0, WealthStore.Load(directory, "Hero-12").Data.Tabs.Length);
+                Check.That(File.Exists(Path.Combine(directory, "Hero-12.json.bad")), text);
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) Directory.Delete(directory, true);
+            }
+        }
+    }
+
+    [Test]
+    public void TwoProfilesAreBothInTheIndex()
+    {
+        var directory = Dir();
+        try
+        {
+            new WealthStore().Save(directory, "Hero-12");
+            new WealthStore().Save(directory, "Alt-12");
+            var index = File.ReadAllText(Path.Combine(directory, "wealth-index.js"));
+            Check.That(index.Contains("\"key\":\"Hero-12\""));
+            Check.That(index.Contains("\"key\":\"Alt-12\""));
         }
         finally
         {
