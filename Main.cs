@@ -581,7 +581,7 @@ public sealed class Main : Plugin<Settings>
         if (Clock() >= _nextProfitAt)
         {
             _nextProfitAt = Clock() + 250;
-            _profitView = Wealth.Session.View(Wealth.CurrentRun, Wealth.Last, Wealth.Store?.Data.Tabs ?? []);
+            _profitView = Wealth.Session.View(Wealth.CurrentRun, Wealth.Current ?? Wealth.Last, Wealth.Store?.Data.Tabs ?? []);
         }
         _profit.Draw(Settings, _profitView, TagIcon(out var hasIcon, Settings.ProfitIcon), hasIcon);
     }

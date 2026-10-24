@@ -30,6 +30,8 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
 
     public Snapshot? Last { get; private set; }
 
+    public Snapshot? Current { get; private set; }
+
     public bool Paused { get; set; }
 
     readonly List<(string Key, WealthStore Store)> retired = [];
@@ -84,7 +86,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         {
             if (at - lastLiveAt < LiveEvery) return added;
             lastLiveAt = at;
-            var live = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
+            var live = Current = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
             if (lastLive is not null && live.Lines.SequenceEqual(lastLive)) return added;
             lastLive = live.Lines;
             if (runs.Open is null)
@@ -104,7 +106,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
             Session.Add(run);
         }
         store.SetOpen(runs.Open);
-        (Last, lastArea, lastSnapshotAt) = (snapshot, (state.AreaId, area.Name), at);
+        (Last, Current, lastArea, lastSnapshotAt) = (snapshot, snapshot, (state.AreaId, area.Name), at);
         return true;
     }
 
@@ -113,7 +115,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         Store?.Clear();
         runs.Reset();
         Session.Restart();
-        (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
+        (Last, Current, lastArea, lastTab, lastLive) = (null, null, null, null, null);
     }
 
     void Switch(string key)
@@ -133,7 +135,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
         (Key, Store) = (key, back ?? Open(key));
         runs.Reset();
         Session.Restart();
-        (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
+        (Last, Current, lastArea, lastTab, lastLive) = (null, null, null, null, null);
     }
 
     static IEnumerable<int> Ids(Snapshot snapshot, WealthStore store) =>

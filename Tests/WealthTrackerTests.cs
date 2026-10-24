@@ -432,6 +432,20 @@ public sealed class WealthTrackerTests
     }
 
     [Test]
+    public void CurrentFollowsTheBagBetweenSnapshots()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 2)]));
+        Check.Equal(20f, tracker.Current!.Total);
+        clock.Advance(2);
+        Tick(tracker, Town([Item(1, 5)]));
+        Check.Equal(50f, tracker.Current!.Total);
+        Check.Equal(20f, tracker.Last!.Total);
+        tracker.Reset();
+        Check.That(tracker.Current is null, "reset clears current");
+    }
+
+    [Test]
     public void IconsComeFromItems()
     {
         TestGame.UseItems(id => id == 1 ? new ItemInfo(1, 0, 0, 0, 0, 0, 0, 0, false, "UI_Item_One") : null, null);
