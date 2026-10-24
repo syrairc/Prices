@@ -13,6 +13,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     IReadOnlyDictionary<int, Price> prices = new Dictionary<int, Price>();
     (int AreaId, string Name)? lastArea;
     DateTimeOffset lastSnapshotAt;
+    Line[]? lastLive;
     int? lastTab;
     DateTimeOffset lastTabAt;
 
@@ -68,9 +69,18 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
             (lastTab, lastTabAt) = (stash.Tab, at);
         }
         var due = lastArea != (state.AreaId, area.Name) || at - lastSnapshotAt >= TimeSpan.FromMinutes(Math.Max(1, snapshotMinutes));
-        if (!due) return added;
+        if (!due)
+        {
+            if (runs.Open is null) return added;
+            var live = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
+            if (lastLive is not null && live.Lines.SequenceEqual(lastLive)) return added;
+            store.SetLive(live);
+            lastLive = live.Lines;
+            return true;
+        }
         var snapshot = Valuation.Value(bag, prices, at, state.AreaId, area.Name, area.IsTown);
-        store.AddSnapshot(snapshot, stored is null ? [] : [stored], Names(snapshot, store));
+        store.AddSnapshot(snapshot, stored is null ? [] : [stored], Names(snapshot, store), Icons(snapshot, store));
+        lastLive = snapshot.Lines;
         if (runs.OnSnapshot(snapshot, prices) is { } run) store.AddRun(run);
         store.SetOpen(runs.Open);
         (Last, lastArea, lastSnapshotAt) = (snapshot, (state.AreaId, area.Name), at);
@@ -81,7 +91,7 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
     {
         Store?.Clear();
         runs.Reset();
-        (Last, lastArea, lastTab) = (null, null, null);
+        (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
     }
 
     void Switch(string key)
@@ -90,14 +100,25 @@ public sealed class WealthTracker(Func<DateTimeOffset> now)
             lock (retired) retired.Add((old, oldStore));
         (Key, Store) = (key, Open(key));
         runs.Reset();
-        (Last, lastArea, lastTab) = (null, null, null);
+        (Last, lastArea, lastTab, lastLive) = (null, null, null, null);
     }
+
+    static IEnumerable<int> Ids(Snapshot snapshot, WealthStore store) =>
+        snapshot.Lines.Concat(store.Data.Tabs.SelectMany(tab => tab.Lines)).Select(line => line.BaseId).Distinct();
 
     static Dictionary<int, string> Names(Snapshot snapshot, WealthStore store)
     {
         var names = new Dictionary<int, string>();
-        foreach (var id in snapshot.Lines.Concat(store.Data.Tabs.SelectMany(tab => tab.Lines)).Select(line => line.BaseId).Distinct())
+        foreach (var id in Ids(snapshot, store))
             if (ItemNames.Of(id) is { Length: > 0 } name) names[id] = name;
         return names;
+    }
+
+    internal static Dictionary<int, string> Icons(Snapshot snapshot, WealthStore store)
+    {
+        var icons = new Dictionary<int, string>();
+        foreach (var id in Ids(snapshot, store))
+            if (Items.TryGet(id, out var info) && !string.IsNullOrEmpty(info.Icon)) icons[id] = info.Icon;
+        return icons;
     }
 }

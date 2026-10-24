@@ -4,6 +4,8 @@
   const time = s => Date.parse(s);
   const seconds = run => (time(run.end) - time(run.start)) / 1000;
 
+  const isUnpriced = line => line.unit === 0 && line.baseId !== FE;
+
   function lineValue(line, eco) {
     return eco.tradeTax && line.baseId !== FE ? line.value * KEPT : line.value;
   }
@@ -53,12 +55,7 @@
     });
   }
 
-  function lastUnit(data, baseId) {
-    const pairs = data.priceHistory && data.priceHistory[baseId];
-    return pairs && pairs.length ? pairs[pairs.length - 1][1] : 0;
-  }
-
-  function diffLines(before, after, data) {
+  function diffLines(before, after) {
     const counts = new Map();
     const units = new Map();
     for (const line of before) {
@@ -72,7 +69,7 @@
     const lines = [];
     for (const [baseId, count] of counts) {
       if (count === 0) continue;
-      const unit = baseId === FE ? 1 : units.get(baseId) || lastUnit(data, baseId);
+      const unit = baseId === FE ? 1 : units.get(baseId) || 0;
       lines.push({ baseId, count, unit, value: count * unit });
     }
     return lines;
@@ -82,6 +79,7 @@
     const items = new Map();
     let gross = 0;
     let costs = 0;
+    let costUnpriced = 0;
     for (const run of runs) {
       for (const line of run.loot) {
         const value = lineValue(line, eco);
@@ -89,16 +87,18 @@
         const item = items.get(line.baseId) || { baseId: line.baseId, count: 0, value: 0 };
         item.count += line.count;
         item.value += value;
+        if (isUnpriced(line)) item.unpriced = true;
         items.set(line.baseId, item);
       }
+      for (const line of run.costs) if (isUnpriced(line)) costUnpriced++;
       if (eco.mapCosts) for (const line of run.costs) costs += Math.abs(line.value);
     }
     const summary = summarise(runs, eco, nowMs);
     const rows = [...items.values()].sort((a, b) => b.value - a.value).map(item => ({ ...item, share: gross > 0 ? item.value / gross : 0 }));
-    return { gross, costs, profit: gross - costs, perHour: summary.fePerHour, perMap: summary.fePerMap, rows };
+    return { gross, costs, profit: gross - costs, perHour: summary.fePerHour, perMap: summary.fePerMap, rows, unpriced: rows.filter(r => r.unpriced).length, costUnpriced };
   }
 
-  const api = { FE, lineValue, runValue, summarise, cumulative, rolling, diffLines, lootReport, seconds };
+  const api = { FE, isUnpriced, lineValue, runValue, summarise, cumulative, rolling, diffLines, lootReport, seconds };
   if (typeof module !== 'undefined') module.exports = api;
   else root.WealthMath = api;
 })(typeof window !== 'undefined' ? window : globalThis);

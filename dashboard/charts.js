@@ -44,6 +44,7 @@
           <polygon points=${area} fill=${'url(#' + id + ')'} />
           <polyline points=${line} fill="none" stroke=${color} strokeWidth="2" strokeLinejoin="round" />
           <text x=${PAD.l} y="10" className="tick">${short(hi)}</text>
+          ${lo < 0 && html`<text x=${PAD.l} y=${H - PAD.b - 3} className="tick">${short(lo)}</text>`}
           <text x=${PAD.l} y=${H - 6} className="tick">${new Date(t0).toLocaleDateString()}</text>
           <text x=${W - PAD.r} y=${H - 6} className="tick" textAnchor="end">${new Date(t1).toLocaleDateString()}</text>
           ${p && html`

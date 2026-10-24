@@ -78,8 +78,9 @@ public static class SampleWealth
         }
         var open = Snap(now.AddMinutes(-6), false, "Cinder Reach", Make(Fe, 8000, 3000), Make(1, 2, 3000), Make(3, 2, 3000), Make(4, 1, 3000));
         var current = Snap(now, false, "Cinder Reach", Make(Fe, 8131, 3000), Make(1, 2, 3000), Make(3, 1, 3000), Make(4, 1, 3000), Make(8, 5, 3000), Make(6, 2, 3000));
-        store.AddSnapshot(current, [], names);
+        store.AddSnapshot(current, [], names, Enumerable.Range(1, 12).ToDictionary(i => i, i => "UI_Item_Sample_" + i));
         store.SetOpen(open);
+        store.SetLive(Snap(now, false, "Cinder Reach", Make(Fe, 8140, 3000), Make(1, 2, 3000), Make(3, 1, 3000), Make(4, 1, 3000), Make(8, 6, 3000), Make(6, 2, 3000), Make(9, 1, 3000)));
         return store;
     }
 

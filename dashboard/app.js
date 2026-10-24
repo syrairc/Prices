@@ -35,6 +35,10 @@
     const s = sec % 60;
     return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m ${String(s).padStart(2, '0')}s`;
   };
+  const asOf = at => {
+    const date = new Date(at);
+    return Date.now() - date.getTime() > 24 * 3600 * 1000 ? date.toLocaleString() : date.toLocaleTimeString();
+  };
   const nameOf = (data, id) => (data.names && data.names[id]) || '#' + id;
 
   function iconSrc(data, id) {
@@ -43,13 +47,33 @@
     if (!dir || !icon) return null;
     const index = window.WEALTH_ICON_INDEX && window.WEALTH_ICON_INDEX.icons && window.WEALTH_ICON_INDEX.icons[icon];
     const file = index ? index.file : icon + '.png';
-    return encodeURI('file:///' + dir.replace(/\\/g, '/') + '/Items/' + file);
+    const parts = dir.replace(/\\/g, '/').split('/').map((part, i) => (i === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)));
+    return 'file:///' + parts.join('/') + '/Items/' + encodeURIComponent(file);
   }
 
   function Icon({ data, id }) {
     const [failed, setFailed] = useState(false);
     const src = iconSrc(data, id);
     return src && !failed ? html`<img className="icon" src=${src} onError=${() => setFailed(true)} />` : html`<span className="icon blank"></span>`;
+  }
+
+  function NameCell({ data, line }) {
+    return html`<td className="name"><${Icon} data=${data} id=${line.baseId} />${nameOf(data, line.baseId)}${M.isUnpriced(line) && html`<em className="warn" title="No price for this item, valued 0">no price</em>`}</td>`;
+  }
+
+  class Boundary extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = { error: null };
+    }
+
+    static getDerivedStateFromError(error) {
+      return { error };
+    }
+
+    render() {
+      return this.state.error ? html`<div className="banner">The page hit an error: ${String((this.state.error && this.state.error.message) || this.state.error)}</div>` : this.props.children;
+    }
   }
 
   function useProfile(key) {
@@ -127,7 +151,7 @@
         <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Unit</th><th className="r">Value</th></tr></thead>
         <tbody>${lines.map(l => html`
           <tr key=${l.baseId}>
-            <td className="name"><${Icon} data=${data} id=${l.baseId} />${nameOf(data, l.baseId)}</td>
+            <${NameCell} data=${data} line=${l} />
             <td className="r">${l.count}</td>
             <td className="r">${num(l.unit, 2)}</td>
             <td className=${'r ' + tone(M.lineValue(l, eco))}>${num(M.lineValue(l, eco))}</td>
@@ -143,6 +167,7 @@
         <h4>Loot</h4>
         <${LinesTable} data=${data} lines=${loot} eco=${eco} />
         <h4>Map costs</h4>
+        ${run.costs.some(M.isUnpriced) && html`<p className="warn-text">A consumed item has no price, so the map cost is understated.</p>`}
         <${LinesTable} data=${data} lines=${run.costs} eco=${eco} />
         <p>Run value <b className=${tone(M.runValue(run, eco))}>${num(M.runValue(run, eco))} FE</b></p>
       <//>`;
@@ -151,7 +176,11 @@
   function csv(report, data) {
     const rows = [['Item', 'Quantity', 'Value (FE)', 'Share %']];
     for (const r of report.rows) rows.push([nameOf(data, r.baseId), r.count, r.value.toFixed(2), (r.share * 100).toFixed(2)]);
-    return rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    const cell = c => {
+      const text = typeof c === 'string' && /^[=+\-@]/.test(c) ? "'" + c : String(c);
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    return '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
   }
 
   function download(name, text) {
@@ -164,7 +193,7 @@
   }
 
   function LootReport({ data, runs, eco, now, onClose }) {
-    const report = useMemo(() => M.lootReport(runs, eco, now), [runs, eco]);
+    const report = useMemo(() => M.lootReport(runs, eco, now), [runs, eco, now]);
     const top = report.rows.filter(r => r.value > 0);
     const slices = top.slice(0, 10).map(r => ({ label: nameOf(data, r.baseId), value: r.value }));
     const rest = top.slice(10).reduce((a, r) => a + r.value, 0);
@@ -177,14 +206,16 @@
           <${Tile} label="Profit" value=${num(report.profit)} tint=${tone(report.profit)} />
           <${Tile} label="Per hour" value=${num(report.perHour)} />
           <${Tile} label="Per map" value=${num(report.perMap)} />
+          <${Tile} label="Unpriced" value=${report.unpriced} tint=${report.unpriced > 0 ? 'bad' : ''} />
         </div>
+        ${report.costUnpriced > 0 && html`<p className="warn-text">A consumed item has no price in ${report.costUnpriced} map cost line(s), so map costs are understated.</p>`}
         <div className="report-body">
           <${Doughnut} slices=${slices} />
           <table className="grid">
             <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Value</th><th className="r">Share</th></tr></thead>
             <tbody>${report.rows.map(r => html`
               <tr key=${r.baseId}>
-                <td className="name"><${Icon} data=${data} id=${r.baseId} />${nameOf(data, r.baseId)}</td>
+                <${NameCell} data=${data} line=${{ baseId: r.baseId, unit: r.unpriced ? 0 : 1 }} />
                 <td className="r">${r.count}</td>
                 <td className=${'r ' + tone(r.value)}>${num(r.value)}</td>
                 <td className="r">${(r.share * 100).toFixed(1)}%</td>
@@ -195,10 +226,12 @@
       <//>`;
   }
 
-  function CurrentRun({ data, eco, setEco, now, last }) {
-    const { open, bag } = data;
-    const live = open && bag && !bag.inTown;
-    const lines = live ? M.diffLines(open.lines, bag.lines, data).sort((a, b) => M.lineValue(b, eco) - M.lineValue(a, eco)) : [];
+  function CurrentRun({ data, eco, setEco, now, last, stale }) {
+    const open = data.open;
+    const bag = data.bag;
+    const current = data.live || bag;
+    const live = open && current && bag && !bag.inTown;
+    const lines = live ? M.diffLines(open.lines, current.lines).sort((a, b) => M.lineValue(b, eco) - M.lineValue(a, eco)) : [];
     const value = lines.reduce((a, l) => a + M.lineValue(l, eco), 0);
     return html`
       <section className="panel">
@@ -207,10 +240,10 @@
           <${Toggle} label="Hide pickups" value=${eco.hideLoot} onChange=${v => setEco({ ...eco, hideLoot: v })} />
         </div>
         ${live ? html`
-          <div className="run-line"><b>${open.areaName}</b><span className="dim">${clock((now - Date.parse(open.at)) / 1000)}</span><b className=${tone(value)}>${signed(value)} FE</b></div>
+          <div className="run-line"><b>${open.areaName}</b><span className="dim">${stale ? 'Last seen ' + new Date(current.at).toLocaleString() : clock((now - Date.parse(open.at)) / 1000)}</span><b className=${tone(value)}>${signed(value)} FE</b></div>
           ${!eco.hideLoot && html`<table className="grid"><tbody>${lines.map(l => html`
             <tr key=${l.baseId}>
-              <td className="name"><${Icon} data=${data} id=${l.baseId} />${nameOf(data, l.baseId)}</td>
+              <${NameCell} data=${data} line=${l} />
               <td className="r">${l.count > 0 ? '+' : ''}${l.count}</td>
               <td className=${'r ' + tone(M.lineValue(l, eco))}>${num(M.lineValue(l, eco))}</td>
             </tr>`)}</tbody></table>`}`
@@ -250,13 +283,13 @@
     const head = (by, label) => html`<th className="r sort" onClick=${() => setSort({ by, dir: sort.by === by ? -sort.dir : -1 })}>${label}${sort.by === by ? (sort.dir < 0 ? ' v' : ' ^') : ''}</th>`;
     return html`
       <section className="panel">
-        <div className="panel-head"><h3>Inventory</h3><span className="dim">${data.bag ? 'as of ' + new Date(data.bag.at).toLocaleTimeString() : ''}</span></div>
+        <div className="panel-head"><h3>Inventory</h3><span className="dim">${data.bag ? (data.bag.unpriced > 0 ? data.bag.unpriced + ' unpriced - ' : '') + 'as of ' + asOf(data.bag.at) : ''}</span></div>
         ${lines.length === 0 ? html`<div className="empty">Bag is empty or not read yet</div>` : html`
           <table className="grid">
             <thead><tr><th>Item</th>${head('qty', 'Qty')}<th className="r">Unit</th>${head('value', 'Total')}<th className="r">Trend</th></tr></thead>
             <tbody>${lines.map(l => html`
               <tr key=${l.baseId}>
-                <td className="name"><${Icon} data=${data} id=${l.baseId} />${nameOf(data, l.baseId)}</td>
+                <${NameCell} data=${data} line=${l} />
                 <td className="r">${l.count}</td>
                 <td className="r">${num(l.unit, 2)}</td>
                 <td className="r">${num(l.value)}</td>
@@ -266,7 +299,7 @@
       </section>`;
   }
 
-  function RunsScreen({ data, eco, setEco, now }) {
+  function RunsScreen({ data, eco, setEco, now, stale }) {
     const [details, setDetails] = useState(null);
     const [report, setReport] = useState(false);
     const runs = data.runs || [];
@@ -288,7 +321,7 @@
           <section className="panel"><div className="panel-head"><h3>FE / Hour</h3><span className="dim">last 10 runs</span></div><${LineChart} points=${rolling} color="#63E0F2" unit="FE/h" /></section>
         </div>
         <div className="cols">
-          <${CurrentRun} data=${data} eco=${eco} setEco=${setEco} now=${now} last=${runs[runs.length - 1]} />
+          <${CurrentRun} data=${data} eco=${eco} setEco=${setEco} now=${now} last=${runs[runs.length - 1]} stale=${stale} />
           <${RecentRuns} runs=${runs} eco=${eco} onDetails=${setDetails} onReport=${() => setReport(true)} />
         </div>
         <${Inventory} data=${data} />
@@ -344,11 +377,11 @@
         ${stale && html`<div className="banner">No new snapshot for ${clock((now - Date.parse(data.bag.at)) / 1000)} - tracking is paused or the game is closed.</div>`}
         ${index.length === 0 && html`<div className="empty big">No data yet. Start the game with the Prices plugin on and it appears here.</div>`}
         ${index.length > 0 && !data && html`<div className="empty big">Loading...</div>`}
-        ${data && screen === 'runs' && html`<${RunsScreen} data=${data} eco=${eco} setEco=${setEco} now=${now} />`}
+        ${data && screen === 'runs' && html`<${RunsScreen} data=${data} eco=${eco} setEco=${setEco} now=${now} stale=${stale} />`}
         ${data && screen === 'wealth' && (Wealth ? html`<${Wealth} data=${data} eco=${eco} now=${now} />` : html`<div className="empty big">Wealth screen is not installed yet.</div>`)}
         ${gear && html`<${Options} eco=${eco} setEco=${setEco} onClose=${() => setGear(false)} />`}
       </div>`;
   }
 
-  ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+  ReactDOM.createRoot(document.getElementById('root')).render(html`<${Boundary}><${App} /><//>`);
 })();

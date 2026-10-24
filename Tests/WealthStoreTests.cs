@@ -240,6 +240,8 @@ public sealed class WealthStoreTests
             """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[{"index":0,"seenAt":"2026-10-24T12:00:00+00:00","lines":null}],"priceHistory":{},"names":{}}""",
             """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{"1":[[1,2,3]]},"names":{}}""",
             """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{"1":[null]},"names":{}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{},"names":{},"open":{"at":"2026-10-24T12:00:00+00:00","areaId":1,"areaName":"x","inTown":false,"total":1,"fe":0,"unpriced":0,"lines":null}}""",
+            """{"version":1,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{},"names":{},"live":{"at":"2026-10-24T12:00:00+00:00","areaId":1,"areaName":"x","inTown":false,"total":1,"fe":0,"unpriced":0,"lines":null}}""",
             """{"version":2,"runs":[],"totals":[],"bag":null,"tabs":[],"priceHistory":{},"names":{}}""",
         };
         foreach (var text in bad)
@@ -270,6 +272,34 @@ public sealed class WealthStoreTests
             var index = File.ReadAllText(Path.Combine(directory, "wealth-index.js"));
             Check.That(index.Contains("\"key\":\"Hero-12\""));
             Check.That(index.Contains("\"key\":\"Alt-12\""));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Test]
+    public void OpenLiveAndIconsSurviveSaveAndLoad()
+    {
+        var directory = Dir();
+        try
+        {
+            var store = new WealthStore();
+            store.AddSnapshot(Snap(0, 5, new Line(1, 1, 5, 5)), [], NoNames, new Dictionary<int, string> { [1] = "UI_Item_One", [2] = "" });
+            store.SetOpen(Snap(0, 5, new Line(1, 1, 5, 5)));
+            store.SetLive(Snap(1, 9, new Line(1, 2, 4.5f, 9)));
+            store.Save(directory, "Hero-12");
+            var loaded = WealthStore.Load(directory, "Hero-12").Data;
+            Check.Equal(2, loaded.Live!.Lines.Single().Count);
+            Check.Equal(1, loaded.Open!.Lines.Single().Count);
+            Check.Equal("UI_Item_One", loaded.Icons![1]);
+            Check.That(!loaded.Icons.ContainsKey(2), "empty icon left out");
+            store.AddSnapshot(Snap(2, 5, new Line(1, 1, 5, 5)), [], NoNames);
+            Check.That(store.Data.Live is null, "a new snapshot clears live");
+            Check.Equal("UI_Item_One", store.Data.Icons![1]);
+            store.SetLive(Snap(3, float.NaN));
+            Check.That(store.Data.Live is null, "NaN live ignored");
         }
         finally
         {

@@ -271,4 +271,62 @@ public sealed class WealthTrackerTests
         tracker.Release(tracker.Retired[0]);
         Check.Equal("B-12", tracker.Retired.Single().Key);
     }
+
+    [Test]
+    public void OpenRunFollowsTheMap()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 1)]));
+        Check.That(tracker.Store!.Data.Open is null, "town");
+        clock.Advance(60);
+        Tick(tracker, Map([Item(1, 1)]));
+        Check.Equal("Map A", tracker.Store.Data.Open!.AreaName);
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 3)]));
+        Check.That(tracker.Store.Data.Open is null, "back in town");
+        clock.Advance(60);
+        Tick(tracker, Map([Item(1, 3)]));
+        Check.That(tracker.Store.Data.Open is not null, "reopened");
+        tracker.Reset();
+        Check.That(tracker.Store.Data.Open is null && tracker.Store.Data.Live is null, "reset");
+    }
+
+    [Test]
+    public void LiveUpdatesBetweenSnapshotsWithoutNewTotals()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 1)]));
+        clock.Advance(60);
+        Tick(tracker, Map([Item(1, 1)]));
+        var totals = tracker.Store!.Data.Totals.Length;
+        Check.That(tracker.Store.Data.Live is null, "no live yet");
+        clock.Advance(5);
+        Check.That(!Tick(tracker, Map([Item(1, 1)])), "unchanged bag");
+        clock.Advance(5);
+        Check.That(Tick(tracker, Map([Item(1, 4)])), "changed bag");
+        Check.Equal(4, tracker.Store.Data.Live!.Lines.Single().Count);
+        Check.Equal(totals, tracker.Store.Data.Totals.Length);
+        clock.Advance(5);
+        Check.That(!Tick(tracker, Map([Item(1, 4)])), "same again");
+        clock.Advance(60);
+        Tick(tracker, Town([Item(1, 4)]));
+        Check.That(tracker.Store.Data.Live is null, "town clears live");
+    }
+
+    [Test]
+    public void IconsComeFromItems()
+    {
+        TestGame.UseItems(id => id == 1 ? new ItemInfo(1, 0, 0, 0, 0, 0, 0, 0, false, "UI_Item_One") : null, null);
+        try
+        {
+            var (tracker, _) = Make();
+            Tick(tracker, Map([Item(1, 1), Item(2, 1, 1)]));
+            Check.Equal("UI_Item_One", tracker.Store!.Data.Icons![1]);
+            Check.That(!tracker.Store.Data.Icons.ContainsKey(2), "no icon left out");
+        }
+        finally
+        {
+            TestGame.UseItems(null, null);
+        }
+    }
 }

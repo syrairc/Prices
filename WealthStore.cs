@@ -10,7 +10,7 @@ public sealed record Point(DateTimeOffset At, float Bags, float Stash, float Tot
 
 public sealed record StashTab(int Index, DateTimeOffset SeenAt, Line[] Lines);
 
-public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, double[][]> PriceHistory, Dictionary<int, string> Names, Snapshot? Open = null);
+public sealed record ProfileData(int Version, Run[] Runs, Point[] Totals, Snapshot? Bag, StashTab[] Tabs, Dictionary<int, double[][]> PriceHistory, Dictionary<int, string> Names, Snapshot? Open = null, Snapshot? Live = null, Dictionary<int, string>? Icons = null);
 
 public sealed class WealthStore
 {
@@ -21,11 +21,11 @@ public sealed class WealthStore
 
     static readonly object saveLock = new();
 
-    static ProfileData Empty => new(1, [], [], null, [], [], []);
+    static ProfileData Empty => new(1, [], [], null, [], [], [], null, null, []);
 
     public ProfileData Data { get; private set; } = Empty;
 
-    public void AddSnapshot(Snapshot bag, IReadOnlyList<StashTab> tabs, IReadOnlyDictionary<int, string> names)
+    public void AddSnapshot(Snapshot bag, IReadOnlyList<StashTab> tabs, IReadOnlyDictionary<int, string> names, IReadOnlyDictionary<int, string>? icons = null)
     {
         if (!float.IsFinite(bag.Total) || !float.IsFinite(bag.Fe) || !Finite(bag.Lines)) return;
         foreach (var tab in tabs) SetTab(tab);
@@ -41,12 +41,17 @@ public sealed class WealthStore
         }
         var merged = new Dictionary<int, string>(Data.Names);
         foreach (var (id, name) in names) merged[id] = name;
+        var mergedIcons = new Dictionary<int, string>(Data.Icons ?? []);
+        foreach (var (id, icon) in icons ?? new Dictionary<int, string>())
+            if (!string.IsNullOrEmpty(icon)) mergedIcons[id] = icon;
         Data = Data with
         {
             Bag = bag,
             Totals = Data.Totals.Append(new Point(bag.At, bag.Total, stash, bag.Total + stash)).TakeLast(MaxTotals).ToArray(),
             PriceHistory = history,
             Names = merged,
+            Icons = mergedIcons,
+            Live = null,
         };
     }
 
@@ -56,7 +61,15 @@ public sealed class WealthStore
         Data = Data with { Runs = Data.Runs.Append(run).TakeLast(MaxRuns).ToArray() };
     }
 
-    public void SetOpen(Snapshot? open) => Data = Data with { Open = open };
+    public void SetOpen(Snapshot? open)
+    {
+        if (open is null || Finite(open)) Data = Data with { Open = open };
+    }
+
+    public void SetLive(Snapshot? live)
+    {
+        if (live is null || Finite(live)) Data = Data with { Live = live };
+    }
 
     public void SetTab(StashTab tab)
     {
@@ -111,7 +124,12 @@ public sealed class WealthStore
         && data.Tabs is not null && data.Tabs.All(tab => tab is { Lines: not null } && tab.Lines.All(line => line is not null))
         && (data.Bag is null || data.Bag.Lines is not null && data.Bag.Lines.All(line => line is not null))
         && data.PriceHistory is not null && data.PriceHistory.Values.All(pairs => pairs is not null && pairs.All(pair => pair is { Length: 2 }))
-        && data.Names is not null;
+        && data.Names is not null
+        && Sound(data.Open) && Sound(data.Live);
+
+    static bool Sound(Snapshot? s) => s is null || s.Lines is not null && s.Lines.All(line => line is not null);
+
+    static bool Finite(Snapshot s) => float.IsFinite(s.Total) && float.IsFinite(s.Fe) && Finite(s.Lines);
 
     static bool Finite(Line[] lines) => lines.All(line => float.IsFinite(line.Unit) && float.IsFinite(line.Value));
 

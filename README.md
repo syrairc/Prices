@@ -14,3 +14,7 @@ EmberHUD plugin for Torchlight: Infinite. FE price tags on bag and stash cells, 
 ## Use
 
 Lives at `E:\EmberHUD\src\Plugins\Prices`, a separate repo inside the `src` working tree (`src` ignores it). The host compiles it from there, `Ember.exe --check` runs its tests. Plugin-only change: copy the files to `E:\EmberHUD\test\Plugins\Prices\` and the host reloads it. Host / Api side (`Game.State.Trade`, `TradeGoods`, `Items`, `Game.WantTradeGoods`) stays in the `src` repo.
+
+## Dashboard
+
+The wealth dashboard (`dashboard\`) is a static page opened from the settings page. Pause and reset live in the settings page, a file:// page cannot write back.

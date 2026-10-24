@@ -253,12 +253,30 @@ public sealed class Main : Plugin<Settings>
                 }
             var icons = Path.Combine(AppContext.BaseDirectory, "GameIcons");
             if (Directory.Exists(icons) && Directory.Exists(target))
-                File.WriteAllText(Path.Combine(target, "wealth-icons.js"), $"window.WEALTH_ICON_DIR = {System.Text.Json.JsonSerializer.Serialize(icons)};");
+                File.WriteAllText(Path.Combine(target, "wealth-icons.js"), IconScript(icons));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _wealthError = "dashboard copy failed: " + ex.Message;
         }
+    }
+
+    internal static string IconScript(string icons)
+    {
+        var files = new Dictionary<string, string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(icons, "Items", "index.json")));
+            if (doc.RootElement.TryGetProperty("icons", out var entries))
+                foreach (var entry in entries.EnumerateObject())
+                    if (entry.Value.TryGetProperty("file", out var file) && file.GetString() is { Length: > 0 } name) files[entry.Name] = name;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            files.Clear();
+        }
+        var json = System.Text.Json.JsonSerializer.Serialize(icons);
+        return $"window.WEALTH_ICON_DIR = {json};\nwindow.WEALTH_ICON_INDEX = {System.Text.Json.JsonSerializer.Serialize(files)};";
     }
 
     void Contribute()
