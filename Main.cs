@@ -725,7 +725,7 @@ public sealed class Main : Plugin<Settings>
         {
             var item = new InventoryItem(InventoryBag.Commodities, 0, "", reward.BaseId, 0, 0, 0, reward.Count, 0, 0);
             if (Settings.TooCheap(item, Tags.Value(item, _prices)) || TagFor(reward.BaseId, reward.Count, false) is not { } text) continue;
-            DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, reward.Min, reward.Max, size));
+            DrawTag(text, icon, hasIcon, size => Tags.Anchor(Settings.Corner, reward.Min, reward.Max, size) + new Vector2(Settings.MapRewardOffsetX, Settings.MapRewardOffsetY));
         }
     }
 
