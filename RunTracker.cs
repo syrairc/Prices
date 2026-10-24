@@ -12,7 +12,7 @@ public sealed record Run(DateTimeOffset Start, DateTimeOffset End, string AreaNa
 
 public sealed class RunTracker
 {
-    static readonly TimeSpan MinRun = TimeSpan.FromSeconds(9);
+    static readonly TimeSpan MinRun = TimeSpan.FromSeconds(10);
 
     Snapshot? last;
 

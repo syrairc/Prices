@@ -91,6 +91,30 @@ public sealed class RunTrackerTests
     }
 
     [Test]
+    public void RunUnderTenSecondsIsDroppedAndTenIsKept()
+    {
+        var tracker = new RunTracker();
+        tracker.OnSnapshot(Town(), Prices);
+        tracker.OnSnapshot(Map(0), Prices);
+        Check.That(tracker.OnSnapshot(Town(9.5), Prices) is null);
+        tracker.OnSnapshot(Map(20), Prices);
+        Check.That(tracker.OnSnapshot(Town(30), Prices) is not null);
+    }
+
+    [Test]
+    public void MapToMapReopenHasNoCostsAndIsNotPartial()
+    {
+        var tracker = new RunTracker();
+        tracker.OnSnapshot(Town(0, 0, (2, 3)), Prices);
+        tracker.OnSnapshot(Map(5, 0, lines: [(2, 2)]), Prices);
+        tracker.OnSnapshot(Map(60, 0, 11, "Map B", lines: [(2, 1)]), Prices);
+        var run = tracker.OnSnapshot(Town(120), Prices)!;
+        Check.Equal("Map B", run.AreaName);
+        Check.That(!run.Partial);
+        Check.Equal(0, run.Costs.Length);
+    }
+
+    [Test]
     public void FirstSnapshotInMapIsPartial()
     {
         var tracker = new RunTracker();
