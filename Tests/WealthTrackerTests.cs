@@ -40,6 +40,18 @@ public sealed class WealthTrackerTests
         tracker.Tick(state, prices ?? Prices, season, minutes, character);
 
     [Test]
+    public void CurrentRunLootFollowsTheLiveBag()
+    {
+        var (tracker, clock) = Make();
+        Tick(tracker, Town([Item(1, 1)]));
+        clock.Advance(1);
+        Tick(tracker, Map([Item(1, 1)]));
+        clock.Advance(2);
+        Tick(tracker, Map([Item(1, 3)]));
+        Check.Equal(20f, tracker.CurrentRun!.Loot.Sum(line => line.Value));
+    }
+
+    [Test]
     public void ShownWealthFollowsTheFilterButKeepsFe()
     {
         var (tracker, clock) = Make();
