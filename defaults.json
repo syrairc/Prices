@@ -5,8 +5,8 @@
   "OffsetY": 8,
   "MapRewardOffsetX": -10,
   "MapRewardOffsetY": -10,
-  "BossRewardOffsetX": 0,
-  "BossRewardOffsetY": 0,
+  "BossRewardOffsetX": -15,
+  "BossRewardOffsetY": -22,
   "Text": {
     "Scale": 1,
     "Face": "Regular",
