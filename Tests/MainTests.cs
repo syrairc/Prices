@@ -216,7 +216,7 @@ public sealed class MainTests
     public void BossDropPricesAsUnidentifiedLegendary()
     {
         var plugin = BossPlugin(400);
-        Check.Equal("?400", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
+        Check.Equal("400*", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
         Check.That(Vertices(plugin, BossState(UniqueBase, Unique)) > 0, "legendary price draws a tag");
         Check.That(Vertices(plugin, BossState(UniqueBase, 0)) > 0, "no special id keeps the base price path");
     }
@@ -234,7 +234,7 @@ public sealed class MainTests
     {
         var plugin = BossPlugin();
         plugin.Prices = new Dictionary<int, Price> { [Unique] = new(50, null, null) };
-        Check.Equal("?50", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
+        Check.Equal("50*", plugin.TagFor(UniqueBase, 1, true, Unique, true, [], []));
         Check.That(Vertices(plugin, BossState(UniqueBase, Unique)) > 0, "community price by id draws a tag");
     }
 

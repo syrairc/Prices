@@ -142,7 +142,7 @@ public sealed class LegendaryTests
         var plugin = Plugin(Gear(1, 100), Gear(2, 400, unidentified: true));
         plugin.Prices = new Dictionary<int, Price> { [BaseId] = new(3, null, null) };
         Check.Equal("100", plugin.TagFor(BaseId, 1, true, Sp, false, [], []));
-        Check.Equal("?400", plugin.TagFor(BaseId, 1, true, Sp, true, [], []));
+        Check.Equal("400*", plugin.TagFor(BaseId, 1, true, Sp, true, [], []));
         Check.Equal("3.0", plugin.TagFor(BaseId, 1, true, 999, false, [], []));
         Check.Equal("3.0", plugin.TagFor(BaseId, 1, true), "a plain item of the same base id keeps the base price");
         InventoryItem[] items = [Bag(Sp, false), Bag(Sp, true), Bag(999, false), Bag(0, false)];
@@ -155,7 +155,7 @@ public sealed class LegendaryTests
     {
         var plugin = new Main { Prices = new Dictionary<int, Price> { [BaseId] = new(3, null, null), [Sp] = new(50, null, null) } };
         Check.Equal("50", plugin.TagFor(BaseId, 1, true, Sp, false, [], []));
-        Check.Equal("?50", plugin.TagFor(BaseId, 1, true, Sp, true, [], []));
+        Check.Equal("50*", plugin.TagFor(BaseId, 1, true, Sp, true, [], []));
         Check.Equal(50.0 + 50 + 3, Tags.Total([Bag(Sp, false), Bag(Sp, true), Bag(0, false)], plugin.Prices));
         var local = Plugin(Gear(1, 100));
         local.Prices = plugin.Prices;

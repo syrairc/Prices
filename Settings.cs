@@ -15,8 +15,8 @@ public sealed partial class Settings : PluginSettings
     public Corner Corner = Corner.TopLeft;
     public int OffsetX = 6;
     public int OffsetY = 8;
-    public int MapRewardOffsetX = -10;
-    public int MapRewardOffsetY = -10;
+    public int MapRewardOffsetX;
+    public int MapRewardOffsetY;
     public int BossRewardOffsetX;
     public int BossRewardOffsetY;
     public TextStyle Text = new() { Color = Color.FromArgb(0xF9, 0xDD, 0x75), ShadowEnabled = true };
