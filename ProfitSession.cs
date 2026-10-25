@@ -29,7 +29,7 @@ public sealed class ProfitSession(Func<DateTimeOffset> now)
             if (run.Start >= start) runs.Add(run);
     }
 
-    public ProfitView? View(Run? open, Snapshot? last, IReadOnlyList<StashTab> tabs)
+    public ProfitView? View(Run? open, Snapshot? last, IReadOnlyList<StashTab> tabs, float? bagWealth = null)
     {
         if (last is null) return null;
         Run[] closed;
@@ -42,7 +42,7 @@ public sealed class ProfitSession(Func<DateTimeOffset> now)
         var summary = Stats.Summarise(closed, SessionEconomy, now());
         var any = closed.Length > 0;
         float? thisMap = open is not null && open.Start >= since ? open.Loot.Sum(line => line.Value) : null;
-        var wealth = last.Total + tabs.Sum(tab => tab.Lines.Sum(line => line.Value));
+        var wealth = (bagWealth ?? last.Total) + tabs.Sum(tab => tab.Lines.Sum(line => line.Value));
         return new ProfitView(
             summary.TotalTime,
             summary.Runs,

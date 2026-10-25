@@ -88,7 +88,10 @@ public sealed class Main : Plugin<Settings>
 
     internal Func<string?> CharacterName { get; set; } = () => "Account";
 
-    internal WealthTracker Wealth => _wealth ??= new WealthTracker(() => Now()) { Open = key => WealthStore.Load(WealthDirectory, key) };
+    internal WealthTracker Wealth => _wealth ??= new WealthTracker(() => Now()) { Open = key => WealthStore.Load(WealthDirectory, key), Include = CountsTowardsWealth };
+
+    bool CountsTowardsWealth(InventoryItem item) =>
+        item.BaseId == Valuation.FeBaseId || Settings.Shows(item) && !Settings.TooCheap(item, Tags.Value(item, _prices, Legendary));
 
     internal Task? WealthSave { get; private set; }
 
@@ -582,7 +585,7 @@ public sealed class Main : Plugin<Settings>
         if (Clock() >= _nextProfitAt)
         {
             _nextProfitAt = Clock() + 250;
-            _profitView = Wealth.Session.View(Wealth.CurrentRun, Wealth.Current ?? Wealth.Last, Wealth.Store?.Data.Tabs ?? []);
+            _profitView = Wealth.Session.View(Wealth.CurrentRun, Wealth.Current ?? Wealth.Last, Wealth.Store?.Data.Tabs ?? [], Wealth.BagWealth);
         }
         _profit.Draw(Settings, _profitView, TagIcon(out var hasIcon, Settings.ProfitIcon), hasIcon);
     }

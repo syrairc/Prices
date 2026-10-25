@@ -40,6 +40,39 @@ public sealed class WealthTrackerTests
         tracker.Tick(state, prices ?? Prices, season, minutes, character);
 
     [Test]
+    public void ShownWealthFollowsTheFilterButKeepsFe()
+    {
+        var (tracker, clock) = Make();
+        tracker.Include = item => item.BaseId != 2;
+        var bag = new[] { Item(1, 2), Item(2, 1), Item(Valuation.FeBaseId, 7) };
+        Tick(tracker, Map(bag));
+        Check.Equal(27f, tracker.BagWealth!.Value);
+        Check.Equal(31f, tracker.Last!.Total + 0);
+        clock.Advance(2);
+        Tick(tracker, Map([Item(1, 3), Item(2, 1)]));
+        Check.Equal(30f, tracker.BagWealth!.Value);
+    }
+
+    [Test]
+    public void StashTabsFollowTheFilter()
+    {
+        var (tracker, _) = Make();
+        tracker.Include = item => item.BaseId != 2;
+        Tick(tracker, WithStash(Map([Item(1, 1)]), 0, [Item(1, 1), Item(2, 5)]));
+        Check.Equal(10f, tracker.Store!.Data.Tabs.Single().Lines.Sum(line => line.Value));
+    }
+
+    [Test]
+    public void ProfitViewUsesTheShownBagWealth()
+    {
+        var (tracker, _) = Make();
+        Tick(tracker, Map([Item(1, 2), Item(2, 1)]));
+        var tab = new StashTab(0, T0, [new Line(1, 1, 10, 10)]);
+        Check.Equal(34f, tracker.Session.View(null, tracker.Last, [tab])!.Wealth);
+        Check.Equal(30f, tracker.Session.View(null, tracker.Last, [tab], 20f)!.Wealth);
+    }
+
+    [Test]
     public void AreaChangeTakesSnapshot()
     {
         var (tracker, clock) = Make();
