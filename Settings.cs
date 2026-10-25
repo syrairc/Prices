@@ -17,8 +17,8 @@ public sealed partial class Settings : PluginSettings
     public int OffsetY = 8;
     public int MapRewardOffsetX = -10;
     public int MapRewardOffsetY = -10;
-    public int BossRewardOffsetX = -15;
-    public int BossRewardOffsetY = -22;
+    public int BossRewardOffsetX;
+    public int BossRewardOffsetY;
     public TextStyle Text = new() { Color = Color.FromArgb(0xF9, 0xDD, 0x75), ShadowEnabled = true };
     public bool ShowIcon = true;
     public bool ShowGrey = true;
