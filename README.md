@@ -3,7 +3,7 @@
 EmberHUD plugin for Torchlight: Infinite. FE price tags on bag and stash cells, bag / stash totals, a local price database built from your own trade house scans.
 
 - Price tags per cell with colour, corner, offset and text style settings, hide-below threshold, per-rarity and per-bag toggles.
-- Sources: TITrack and Etor community prices plus your own local trade house scans, merged by priority. Legendaries are priced by their own listings.
+- Sources: TITrack (needs its API key pasted into the settings, none is shipped) and Etor community prices plus your own local trade house scans, merged by priority. Legendaries are priced by their own listings.
 - Totals for the open bag and stash, optionally as a low-high range. Moves with Alt through `EmberHUD.Ui.Overlay`.
 - Local database tab: scanned listings, purge, share / import between friends.
 

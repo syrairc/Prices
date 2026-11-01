@@ -58,7 +58,21 @@ public sealed class PriceSyncTests
             Clock = () => clock?[0] ?? 0,
         };
         plugin.Settings.UseEtor = false;
+        plugin.Settings.TitrackKey = "test-key";
         return plugin;
+    }
+
+    [Test]
+    public void WithoutAnApiKeyNothingIsAskedFromTitrack()
+    {
+        var stub = new Stub(Reply);
+        var plugin = Syncing(stub);
+        plugin.Settings.TitrackKey = "";
+        plugin.Tick();
+        plugin.Tick();
+        Check.Equal(0, stub.Urls.Count);
+        Check.That(plugin.Settings.Active.Length == 0, "TITrack is not active without a key");
+        Clean(plugin);
     }
 
     sealed class Silent : HttpMessageHandler
@@ -259,6 +273,7 @@ public sealed class PriceSyncTests
     public void EnableLoadsTheCacheBeforeAnyNetwork()
     {
         var plugin = new Main { DataDirectory = TempPath(), Http = new HttpClient(new Silent()), Job = new BackgroundJob<Synced>(inline: true) };
+        plugin.Settings.TitrackKey = "test-key";
         var old = Path.Combine(plugin.DataDirectory, "prices-1501.json");
         PriceSync.Save(old, new PriceFile(1501, null, new Dictionary<int, Price> { [5] = new(1, null, null) }));
         MakeOld(old);
@@ -402,6 +417,7 @@ public sealed class PriceSyncTests
     public void CachedStatusShowsTheFileTime()
     {
         var plugin = new Main { DataDirectory = TempPath(), Http = new HttpClient(new Silent()), Job = new BackgroundJob<Synced>(inline: true) };
+        plugin.Settings.TitrackKey = "test-key";
         var path = Path.Combine(plugin.DataDirectory, "prices-1601.json");
         PriceSync.Save(path, File(null, (7, 3)));
         System.IO.File.SetLastWriteTime(path, new DateTime(2026, 10, 10, 8, 7, 0));

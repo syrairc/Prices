@@ -188,7 +188,7 @@ public sealed class SourcesTests
     [Test]
     public void SettingsOrderAndActive()
     {
-        var settings = new Settings { UseTitrack = true, UseEtor = true, UseLocal = false, Priority = [PriceSource.Titrack] };
+        var settings = new Settings { TitrackKey = "key", UseTitrack = true, UseEtor = true, UseLocal = false, Priority = [PriceSource.Titrack] };
         Check.That(settings.Order().SequenceEqual([PriceSource.Titrack, PriceSource.Etor, PriceSource.Local]), "missing sources are appended");
         Check.That(settings.Active.SequenceEqual([PriceSource.Titrack, PriceSource.Etor]), "only enabled ones, in order");
         Check.That(new Settings { Priority = [PriceSource.Etor, PriceSource.Etor] }.Order().Length == 3, "duplicates collapse");
